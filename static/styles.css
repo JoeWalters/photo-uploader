@@ -48,6 +48,32 @@ button:hover {
     background-color: #0056b3;
 }
 
+/* Back to Dashboard Button */
+.back-to-dashboard {
+    display: inline-block;
+    padding: 10px 20px;
+    font-size: 16px;
+    font-weight: bold;
+    color: white;
+    background-color: #007BFF;
+    border: none;
+    border-radius: 5px;
+    text-decoration: none;
+    text-align: center;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.back-to-dashboard:hover {
+    background-color: #0056b3;
+    transform: scale(1.1);
+}
+
+.back-to-dashboard:active {
+    background-color: #003f8a;
+    transform: scale(0.95);
+}
+
 /* Gallery Styles */
 .gallery {
     display: grid;
@@ -91,14 +117,6 @@ button:hover {
 .delete-button:active {
     background-color: #CC0000;
     transform: scale(0.95);
-}
-
-/* Floating Buttons */
-.settings-container {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
 }
 
 .settings-button {

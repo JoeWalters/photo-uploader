@@ -2,7 +2,7 @@ from flask import Flask, request, redirect, render_template, url_for, send_from_
 import os
 
 # Configuration
-DEFAULT_UPLOAD_FOLDER = '/Uploads/'  # Default directory for uploads
+DEFAULT_UPLOAD_FOLDER = '/Users/'  # Default directory for uploads
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 app = Flask(__name__)

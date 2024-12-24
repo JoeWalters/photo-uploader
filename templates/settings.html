@@ -7,17 +7,16 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <div class="back-container">
-        <a href="{{ url_for('index') }}" class="back-link" title="Back to Dashboard">
-            ⬅️ Back to Dashboard
-        </a>
+    <div class="settings-container">
+        <!-- Back to Dashboard Button -->
+        <a href="/" class="back-to-dashboard" title="Back to Dashboard">⬅️ Back to Dashboard</a>
     </div>
 
     <h1>Settings</h1>
     <form action="/settings" method="post">
         <label for="upload_folder">Upload Folder:</label>
-        <input type="text" id="upload_folder" name="upload_folder" value="{{ current_folder }}">
-        <button type="submit">Save</button>
+        <input type="text" id="upload_folder" name="upload_folder" value="{{ current_folder }}" class="form-control">
+        <button type="submit" class="btn btn-success">Save</button>
     </form>
 </body>
 </html>
