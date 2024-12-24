@@ -1,34 +1,29 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photo Uploader</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-</head>
-<body>
-    <div class="settings-container">
-        <a href="{{ url_for('settings') }}" class="settings-button" title="Settings">
-            ⚙️ Settings
-        </a>
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-center text-shadow mt-4 mb-4 fw-bold">Uploaded Images</h1>
+
+<!-- Upload/Browse Feature -->
+<form action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data" class="mb-4">
+    <div class="input-group">
+        <input type="file" name="files" multiple class="form-control">
+        <button type="submit" class="btn btn-primary">Upload</button>
     </div>
+</form>
 
-    <h1>Photo Uploader</h1>
-    <form action="/upload" method="post" enctype="multipart/form-data">
-        <input type="file" name="files" accept="image/*" multiple>
-        <button type="submit">Upload</button>
-    </form>
-
-    <h2>Uploaded Photos</h2>
-    <div class="gallery">
-        {% for image in images %}
-        <div class="gallery-item">
-            <img src="{{ url_for('uploaded_file', filename=image) }}" alt="{{ image }}">
-            <form action="{{ url_for('delete_file', filename=image) }}" method="post" class="delete-form">
-                <button type="submit" class="delete-button">Delete</button>
-            </form>
+<!-- Uploaded Images Section -->
+<div class="row">
+    {% for image in images %}
+    <div class="col-md-3">
+        <div class="card mb-4 shadow-sm">
+            <img src="{{ url_for('uploaded_file', filename=image) }}" class="card-img-top" alt="{{ image }}">
+            <div class="card-body text-center">
+                <form action="{{ url_for('delete_file', filename=image) }}" method="POST">
+                    <button type="submit" class="btn btn-danger btn-sm w-100">Delete</button>
+                </form>
+            </div>
         </div>
-        {% endfor %}
     </div>
-</body>
-</html>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -1,22 +1,66 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-</head>
-<body>
-    <div class="settings-container">
-        <!-- Back to Dashboard Button -->
-        <a href="/" class="back-to-dashboard" title="Back to Dashboard">⬅️ Back to Dashboard</a>
-    </div>
+{% extends "base.html" %}
 
-    <h1>Settings</h1>
-    <form action="/settings" method="post">
-        <label for="upload_folder">Upload Folder:</label>
-        <input type="text" id="upload_folder" name="upload_folder" value="{{ current_folder }}" class="form-control">
-        <button type="submit" class="btn btn-success">Save</button>
+{% block content %}
+<div class="container mt-5">
+    <h1 class="text-center fw-bold mb-4 text-shadow" style="color: #333;">Settings</h1>
+    
+    <!-- Display Error Messages -->
+    {% if error_messages %}
+    <div class="alert alert-danger">
+        <ul>
+            {% for error in error_messages %}
+            <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Settings Form -->
+    <form method="POST" class="p-4 rounded shadow bg-light mx-auto" style="max-width: 500px;">
+        <div class="mb-3">
+            <label for="upload_folder" class="form-label fw-bold">Upload Folder</label>
+            <input 
+                type="text" 
+                name="upload_folder" 
+                id="upload_folder" 
+                class="form-control" 
+                value="{{ current_folder }}" 
+                placeholder="Enter the upload folder path">
+        </div>
+        <div class="mb-3">
+            <label for="allowed_extensions" class="form-label fw-bold">Allowed Extensions</label>
+            <input 
+                type="text" 
+                name="allowed_extensions" 
+                id="allowed_extensions" 
+                class="form-control" 
+                value="{{ current_extensions }}" 
+                placeholder="e.g., jpg, png, gif">
+            <div class="form-text">Enter file extensions separated by commas (e.g., jpg, png, gif). Do not include spaces between extensions.</div>
+        </div>
+        <div class="mb-3">
+            <label for="max_height" class="form-label fw-bold">Max Image Height</label>
+            <input 
+                type="number" 
+                name="max_height" 
+                id="max_height" 
+                class="form-control" 
+                value="{{ max_height }}" 
+                placeholder="Enter max image height">
+        </div>
+        <div class="mb-3">
+            <label for="max_width" class="form-label fw-bold">Max Image Width</label>
+            <input 
+                type="number" 
+                name="max_width" 
+                id="max_width" 
+                class="form-control" 
+                value="{{ max_width }}" 
+                placeholder="Enter max image width">
+        </div>
+        <div class="text-center">
+            <button type="submit" class="btn btn-primary btn-lg">Save</button>
+        </div>
     </form>
-</body>
-</html>
+</div>
+{% endblock %}
