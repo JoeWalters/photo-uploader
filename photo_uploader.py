@@ -15,7 +15,7 @@ def ensure_pillow_installed():
 
 ensure_pillow_installed()
 
-from PIL import Image
+from PIL import Image, ExifTags
 
 # Configuration
 DEFAULT_UPLOAD_FOLDER = '/Users/'  # Default directory for uploads
@@ -39,7 +39,28 @@ def resize_image(image_path):
     max_height = app.config['MAX_HEIGHT']
     max_width = app.config['MAX_WIDTH']
     with Image.open(image_path) as img:
-        img.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)  # Use LANCZOS instead of ANTIALIAS
+        # Correct the orientation based on EXIF data
+        try:
+            for orientation in ExifTags.TAGS.keys():
+                if ExifTags.TAGS[orientation] == 'Orientation':
+                    break
+            exif = img._getexif()
+            if exif is not None:
+                orientation_value = exif.get(orientation)
+                if orientation_value == 3:
+                    img = img.rotate(180, expand=True)
+                elif orientation_value == 6:
+                    img = img.rotate(270, expand=True)
+                elif orientation_value == 8:
+                    img = img.rotate(90, expand=True)
+        except (AttributeError, KeyError, IndexError):
+            # If EXIF data is missing or unreadable, do nothing
+            pass
+
+        # Resize the image
+        img.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+        
+        # Save the resized image
         img.save(image_path)
 
 @app.route('/')
@@ -141,4 +162,4 @@ def settings():
     )
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
