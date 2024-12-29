@@ -21,10 +21,13 @@
     </div>
 
     <!-- Upload Form -->
-    <form action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data" class="mb-4">
+    <form id="uploadForm" action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data" class="mb-4">
         <div class="input-group">
             <input type="file" name="files" multiple class="form-control" id="fileInput">
             <button type="submit" class="btn btn-primary">Upload</button>
+        </div>
+        <div id="uploadAlert" class="mt-2 d-none alert alert-danger" role="alert">
+            Please select at least one file to upload.
         </div>
     </form>
 
@@ -53,4 +56,19 @@
     <p class="text-center text-muted">No images uploaded yet. Start by uploading your files!</p>
     {% endif %}
 </div>
+
+<script>
+    // Prevent form submission if no files are selected
+    document.getElementById("uploadForm").addEventListener("submit", function (event) {
+        const fileInput = document.getElementById("fileInput");
+        const alertBox = document.getElementById("uploadAlert");
+
+        if (!fileInput.files.length) {
+            event.preventDefault(); // Stop form submission
+            alertBox.classList.remove("d-none"); // Show alert box
+        } else {
+            alertBox.classList.add("d-none"); // Hide alert box
+        }
+    });
+</script>
 {% endblock %}
