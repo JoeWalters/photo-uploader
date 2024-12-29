@@ -12,29 +12,6 @@ This is a good option for uploading files to a photo-slideshow.
 | <img src="src/image1.png" width="500"> |<img src="src/image2.png" width="500">|
 | <img src="src/image3.png" width="500"> ||
 
-<style>
-.gallery {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.gallery-item {
-  margin: 10px;
-  text-align: center;
-}
-
-.gallery-item img {
-  max-width: 200px;
-  height: auto;
-  display: block;
-}
-
-.caption {
-    font-size: small;
-}
-</style>
-
 ## Features
 
 - **Image Upload**: Supports multiple file uploads at once.
