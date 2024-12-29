@@ -6,18 +6,17 @@
 
     <!-- Sorting Options -->
     <div class="d-flex justify-content-center mb-3">
-        <a href="{{ url_for('index', sort_by='name', sort_order='asc') }}" class="btn btn-outline-primary me-2">
-            Sort by Name (A-Z)
-        </a>
-        <a href="{{ url_for('index', sort_by='name', sort_order='desc') }}" class="btn btn-outline-primary me-2">
-            Sort by Name (Z-A)
-        </a>
-        <a href="{{ url_for('index', sort_by='date', sort_order='asc') }}" class="btn btn-outline-primary me-2">
-            Sort by Date (Oldest First)
-        </a>
-        <a href="{{ url_for('index', sort_by='date', sort_order='desc') }}" class="btn btn-outline-primary">
-            Sort by Date (Newest First)
-        </a>
+        <div class="dropdown">
+            <button class="btn btn-outline-primary dropdown-toggle" type="button" id="sortDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                Sort Options
+            </button>
+            <ul class="dropdown-menu" aria-labelledby="sortDropdown">
+                <li><a class="dropdown-item" href="{{ url_for('index', sort_by='name', sort_order='asc') }}">Sort by Name (A-Z)</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('index', sort_by='name', sort_order='desc') }}">Sort by Name (Z-A)</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('index', sort_by='date', sort_order='asc') }}">Sort by Date (Oldest First)</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('index', sort_by='date', sort_order='desc') }}">Sort by Date (Newest First)</a></li>
+            </ul>
+        </div>
     </div>
 
     <!-- Upload Form -->
