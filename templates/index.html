@@ -6,11 +6,17 @@
 
     <!-- Sorting Options -->
     <div class="d-flex justify-content-center mb-3">
-        <a href="{{ url_for('index', sort_by='name') }}" class="btn btn-outline-primary me-2">
-            Sort by Name
+        <a href="{{ url_for('index', sort_by='name', sort_order='asc') }}" class="btn btn-outline-primary me-2">
+            Sort by Name (A-Z)
         </a>
-        <a href="{{ url_for('index', sort_by='date') }}" class="btn btn-outline-primary">
-            Sort by Date
+        <a href="{{ url_for('index', sort_by='name', sort_order='desc') }}" class="btn btn-outline-primary me-2">
+            Sort by Name (Z-A)
+        </a>
+        <a href="{{ url_for('index', sort_by='date', sort_order='asc') }}" class="btn btn-outline-primary me-2">
+            Sort by Date (Oldest First)
+        </a>
+        <a href="{{ url_for('index', sort_by='date', sort_order='desc') }}" class="btn btn-outline-primary">
+            Sort by Date (Newest First)
         </a>
     </div>
 

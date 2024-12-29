@@ -76,17 +76,22 @@ def index():
     files = os.listdir(app.config['UPLOAD_FOLDER'])
     images = [file for file in files if allowed_file(file)]
     sort_by = request.args.get('sort_by', 'name')  # Default sort by name
+    sort_order = request.args.get('sort_order', 'asc')  # Default order is ascending
     image_metadata = [
         get_image_metadata(os.path.join(app.config['UPLOAD_FOLDER'], image))
         for image in images
     ]
 
     if sort_by == 'date':
-        image_metadata.sort(key=lambda x: x['mod_time'], reverse=True)  # Newest first
-    else:
-        image_metadata.sort(key=lambda x: x['name'])  # Alphabetical order
+        reverse_order = sort_order == 'desc'
+        image_metadata.sort(key=lambda x: x['mod_time'], reverse=reverse_order)  # Sort by date
+    elif sort_by == 'name':
+        reverse_order = sort_order == 'desc'
+        image_metadata.sort(
+            key=lambda x: x['name'].lower(), reverse=reverse_order
+        )  # Sort by name, case insensitive
 
-    return render_template('index.html', images=image_metadata, sort_by=sort_by)
+    return render_template('index.html', images=image_metadata, sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
