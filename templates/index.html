@@ -1,29 +1,50 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="text-center text-shadow mt-4 mb-4 fw-bold">Uploaded Images</h1>
+<div class="container mt-4">
+    <h1 class="text-center text-shadow mb-4 fw-bold">Image Gallery</h1>
 
-<!-- Upload/Browse Feature -->
-<form action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data" class="mb-4">
-    <div class="input-group">
-        <input type="file" name="files" multiple class="form-control">
-        <button type="submit" class="btn btn-primary">Upload</button>
+    <!-- Sorting Options -->
+    <div class="d-flex justify-content-center mb-3">
+        <a href="{{ url_for('index', sort_by='name') }}" class="btn btn-outline-primary me-2">
+            Sort by Name
+        </a>
+        <a href="{{ url_for('index', sort_by='date') }}" class="btn btn-outline-primary">
+            Sort by Date
+        </a>
     </div>
-</form>
 
-<!-- Uploaded Images Section -->
-<div class="row">
-    {% for image in images %}
-    <div class="col-md-3">
-        <div class="card mb-4 shadow-sm">
-            <img src="{{ url_for('uploaded_file', filename=image) }}" class="card-img-top" alt="{{ image }}">
-            <div class="card-body text-center">
-                <form action="{{ url_for('delete_file', filename=image) }}" method="POST">
-                    <button type="submit" class="btn btn-danger btn-sm w-100">Delete</button>
-                </form>
+    <!-- Upload Form -->
+    <form action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data" class="mb-4">
+        <div class="input-group">
+            <input type="file" name="files" multiple class="form-control" id="fileInput">
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </div>
+    </form>
+
+    <!-- Image Grid -->
+    <div class="row">
+        {% for image in images %}
+        <div class="col-md-3 mb-4">
+            <div class="card shadow-sm">
+                <img src="{{ url_for('uploaded_file', filename=image['name']) }}" class="card-img-top" alt="{{ image['name'] }}">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-truncate">{{ image['name'] }}</h5>
+                    <p class="card-text text-muted small">
+                        Uploaded: {{ image['mod_time'].strftime('%Y-%m-%d %H:%M:%S') }}
+                    </p>
+                    <form action="{{ url_for('delete_file', filename=image['name']) }}" method="POST">
+                        <button type="submit" class="btn btn-danger btn-sm w-100">Delete</button>
+                    </form>
+                </div>
             </div>
         </div>
+        {% endfor %}
     </div>
-    {% endfor %}
+
+    <!-- No Images Message -->
+    {% if not images %}
+    <p class="text-center text-muted">No images uploaded yet. Start by uploading your files!</p>
+    {% endif %}
 </div>
 {% endblock %}
