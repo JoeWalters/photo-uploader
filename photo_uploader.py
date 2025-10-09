@@ -95,14 +95,18 @@ def load_config():
             logger.info("Configuration loaded from config/config.json")
             return config
         else:
-            # Create default config file
-            config_file.parent.mkdir(exist_ok=True)
-            with open(config_file, 'w') as f:
-                json.dump(default_config, f, indent=4)
-            logger.info("Created default config/config.json")
+            # Try to create default config file
+            try:
+                config_file.parent.mkdir(exist_ok=True)
+                with open(config_file, 'w') as f:
+                    json.dump(default_config, f, indent=4)
+                logger.info("Created default config/config.json")
+            except (IOError, PermissionError) as e:
+                logger.warning(f"Could not create config file: {e}")
+                logger.info("Using default configuration (config file will be read-only)")
             return default_config
             
-    except (json.JSONDecodeError, IOError) as e:
+    except (json.JSONDecodeError, IOError, PermissionError) as e:
         logger.error(f"Error loading config file: {e}")
         logger.info("Using default configuration")
         return default_config
@@ -175,7 +179,16 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
 
 # Configure Flask app from config
-app.config['UPLOAD_FOLDER'] = os.path.expanduser(config['upload']['folder'])
+upload_folder = config['upload']['folder']
+
+# In Docker, always use /app/uploads if the config points to ~/photo_uploads
+if upload_folder == "~/photo_uploads" and os.path.exists('/app/uploads'):
+    upload_folder = '/app/uploads'
+    logger.info("Using Docker default upload folder: /app/uploads")
+else:
+    upload_folder = os.path.expanduser(upload_folder)
+
+app.config['UPLOAD_FOLDER'] = upload_folder
 app.config['MAX_HEIGHT'] = config['image_processing']['max_height']
 app.config['MAX_WIDTH'] = config['image_processing']['max_width']
 app.config['MAX_CONTENT_LENGTH'] = config['upload']['max_file_size_mb'] * 1024 * 1024
@@ -202,9 +215,22 @@ def inject_version():
 # Ensure the upload folder exists
 try:
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    logger.info(f"Upload folder ready: {app.config['UPLOAD_FOLDER']}")
+    
+    # Test if we can write to the upload folder
+    test_file = os.path.join(app.config['UPLOAD_FOLDER'], '.write_test')
+    try:
+        with open(test_file, 'w') as f:
+            f.write('test')
+        os.remove(test_file)
+        logger.info(f"Upload folder ready: {app.config['UPLOAD_FOLDER']}")
+    except (IOError, PermissionError) as e:
+        logger.error(f"Upload folder is not writable: {e}")
+        logger.error(f"Please check permissions on: {app.config['UPLOAD_FOLDER']}")
+        sys.exit(1)
+        
 except Exception as e:
     logger.error(f"Failed to create upload folder: {e}")
+    logger.error("This is usually a permissions issue. In Docker, ensure volumes are mounted correctly.")
     sys.exit(1)
 
 def allowed_file(filename):

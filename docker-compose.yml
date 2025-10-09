@@ -7,13 +7,14 @@ services:
     restart: unless-stopped
     ports:
       - "5001:5001"
+    user: "1000:1000"  # Run as current user (adjust as needed)
     volumes:
       # Config directory - edit config.json to customize settings
-      - ./config:/app/config
-      # Upload directory - where your photos will be stored
-      - ./uploads:/app/uploads
+      - ./config:/app/config:rw
+      # Upload directory - where your photos will be stored  
+      - ./uploads:/app/uploads:rw
       # Optional: Logs directory
-      - ./logs:/app/logs
+      - ./logs:/app/logs:rw
     environment:
       # Optional environment variables (these override config.json)
       - TZ=America/New_York  # Set your timezone

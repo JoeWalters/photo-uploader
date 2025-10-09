@@ -1,8 +1,5 @@
 FROM python:3.11-slim
 
-# Set working directory
-WORKDIR /app
-
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
@@ -13,7 +10,11 @@ RUN apt-get update && apt-get install -y \
     libopenjp2-7-dev \
     libtiff5-dev \
     libwebp-dev \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
 
 # Copy requirements first for better caching
 COPY requirements.txt .
@@ -31,14 +32,11 @@ ARG BUILD_DATE
 RUN echo "${BUILD_DATE:-unknown}" > /app/version.txt
 
 # Create directories for mounted volumes
-RUN mkdir -p /app/config /app/uploads
+RUN mkdir -p /app/config /app/uploads /app/logs
 
-# Create non-root user for security
-RUN groupadd -r photoapp && useradd -r -g photoapp photoapp
-RUN chown -R photoapp:photoapp /app
-
-# Switch to non-root user
-USER photoapp
+# Create entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Expose port
 EXPOSE 5001
@@ -47,5 +45,6 @@ EXPOSE 5001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:5001', timeout=5)" || exit 1
 
-# Default command
+# Use entrypoint script
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python", "photo_uploader.py"]

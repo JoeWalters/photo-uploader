@@ -69,8 +69,9 @@ jobs:
     - name: Test Docker image
       if: github.event_name != 'pull_request'
       run: |
-        # Create test directories
+        # Create test directories with proper permissions
         mkdir -p /tmp/test-config /tmp/test-uploads
+        chmod 755 /tmp/test-config /tmp/test-uploads
         
         # Create a basic config file for testing
         cat > /tmp/test-config/config.json << EOF
