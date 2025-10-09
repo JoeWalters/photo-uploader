@@ -69,17 +69,49 @@ jobs:
     - name: Test Docker image
       if: github.event_name != 'pull_request'
       run: |
+        # Create test directories
+        mkdir -p /tmp/test-config /tmp/test-uploads
+        
+        # Create a basic config file for testing
+        cat > /tmp/test-config/config.json << EOF
+        {
+          "server": {"host": "0.0.0.0", "port": 5001, "debug": false},
+          "upload": {"folder": "/app/uploads", "max_file_size_mb": 10, "allowed_extensions": ["jpg", "png"]},
+          "image_processing": {"max_width": 1920, "max_height": 1080, "auto_rotate": true, "optimize": true, "quality": 85}
+        }
+        EOF
+        
+        # Start container
         docker run --rm -d --name test-container \
           -p 5001:5001 \
-          -v $(pwd)/config:/app/config \
+          -v /tmp/test-config:/app/config \
           -v /tmp/test-uploads:/app/uploads \
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
         
-        # Wait for container to start
-        sleep 10
+        # Wait for container to be healthy (max 60 seconds)
+        echo "Waiting for container to start..."
+        for i in {1..60}; do
+          if curl -f -s http://localhost:5001 > /dev/null 2>&1; then
+            echo "Container is healthy after $i seconds"
+            break
+          fi
+          if [ $i -eq 60 ]; then
+            echo "Container failed to start within 60 seconds"
+            docker logs test-container
+            docker stop test-container
+            exit 1
+          fi
+          sleep 1
+        done
         
-        # Test health endpoint
-        curl -f http://localhost:5001 || exit 1
+        # Test endpoints
+        echo "Testing main page..."
+        curl -f http://localhost:5001
+        
+        echo "Testing version endpoint..."
+        curl -f http://localhost:5001/version
+        
+        echo "All tests passed!"
         
         # Stop test container
         docker stop test-container
