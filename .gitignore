@@ -222,3 +222,57 @@ htmlcov/
 run_local.sh
 dev.py
 test_local.py
+
+# Photo files (in case someone accidentally puts photos in repo)
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.tif
+*.webp
+*.heic
+*.raw
+*.cr2
+*.nef
+*.dng
+
+# Except the logo and example images in static/src directories
+!static/*.png
+!static/*.jpg
+!static/*.jpeg
+!static/*.gif
+!src/*.png
+!src/*.jpg
+!src/*.jpeg
+!src/*.gif
+
+# Backup config files
+config.backup
+config.old
+settings.backup
+settings.old
+
+# Docker build context artifacts (if created locally)
+.docker/
+docker-build/
+
+# Local environment files
+.env.local
+.env.development
+.env.production
+
+# MacOS
+.AppleDouble
+.LSOverride
+Icon
+
+# Thumbnails
+._*
+
+# Files that might contain sensitive information
+secrets.txt
+passwords.txt
+api_keys.txt
+.secrets/

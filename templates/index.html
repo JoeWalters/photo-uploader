@@ -15,6 +15,8 @@
                 <li><a class="dropdown-item" href="{{ url_for('index', sort_by='name', sort_order='desc') }}">Sort by Name (Z-A)</a></li>
                 <li><a class="dropdown-item" href="{{ url_for('index', sort_by='date', sort_order='asc') }}">Sort by Date (Oldest First)</a></li>
                 <li><a class="dropdown-item" href="{{ url_for('index', sort_by='date', sort_order='desc') }}">Sort by Date (Newest First)</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('index', sort_by='size', sort_order='asc') }}">Sort by Size (Smallest First)</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('index', sort_by='size', sort_order='desc') }}">Sort by Size (Largest First)</a></li>
             </ul>
         </div>
     </div>
@@ -39,7 +41,11 @@
                 <div class="card-body text-center">
                     <h5 class="card-title text-truncate">{{ image['name'] }}</h5>
                     <p class="card-text text-muted small">
-                        Uploaded: {{ image['mod_time'].strftime('%Y-%m-%d %H:%M:%S') }}
+                        Uploaded: {{ image['mod_time'].strftime('%Y-%m-%d %H:%M:%S') }}<br>
+                        Size: {{ image['size_mb'] }}MB
+                        {% if image['width'] and image['height'] %}
+                        <br>Dimensions: {{ image['width'] }}x{{ image['height'] }}
+                        {% endif %}
                     </p>
                     <form action="{{ url_for('delete_file', filename=image['name']) }}" method="POST">
                         <button type="submit" class="btn btn-danger btn-sm w-100">Delete</button>

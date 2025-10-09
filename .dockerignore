@@ -1,0 +1,51 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# Development files
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.coverage
+.pytest_cache/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Application specific
+photo_uploader.log
+uploads/
+logs/
+version.txt
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# GitHub
+.github/
+
+# Example and demo files
+demo.py
+UPGRADE_SUMMARY.md
+DOCKER.md
+unraid-template.xml
+
+# Config examples (keep the main config.json structure)
+config/config.example.json

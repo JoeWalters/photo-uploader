@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  photo-uploader:
+    image: joewalters/photo-uploader:latest
+    container_name: photo-uploader
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    volumes:
+      # Config directory - edit config.json to customize settings
+      - ./config:/app/config
+      # Upload directory - where your photos will be stored
+      - ./uploads:/app/uploads
+      # Optional: Logs directory
+      - ./logs:/app/logs
+    environment:
+      # Optional environment variables (these override config.json)
+      - TZ=America/New_York  # Set your timezone
+      # - UPLOAD_FOLDER=/app/uploads  # Override upload folder
+      # - PORT=5001                   # Override port
+      # - HOST=0.0.0.0               # Override host
+      # - APP_VERSION=20251009123456  # Override version for local testing
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5001', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "traefik.enable=true"  # If using Traefik
+      - "traefik.http.routers.photo-uploader.rule=Host(`photos.yourdomain.com`)"
+      - "traefik.http.services.photo-uploader.loadbalancer.server.port=5001"

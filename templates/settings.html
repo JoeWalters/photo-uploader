@@ -58,9 +58,35 @@
                 value="{{ max_width }}" 
                 placeholder="Enter max image width">
         </div>
+        <div class="mb-3">
+            <label for="max_file_size_mb" class="form-label fw-bold">Max File Size (MB)</label>
+            <input 
+                type="number" 
+                name="max_file_size_mb" 
+                id="max_file_size_mb" 
+                class="form-control" 
+                value="{{ max_file_size_mb }}" 
+                placeholder="Enter max file size in MB">
+            <div class="form-text">Maximum file size for uploads in megabytes.</div>
+        </div>
         <div class="text-center">
-            <button type="submit" class="btn btn-primary btn-lg">Save</button>
+            <button type="submit" class="btn btn-primary btn-lg">Save Settings</button>
         </div>
     </form>
+    
+    <!-- Version Information -->
+    {% if app_version %}
+    <div class="mt-4 text-center">
+        <small class="text-muted">
+            <strong>Application Version:</strong> {{ version_display }}<br>
+            <strong>Build Date:</strong> 
+            {% if app_version|length == 14 %}
+                {{ app_version[:4] }}-{{ app_version[4:6] }}-{{ app_version[6:8] }} {{ app_version[8:10] }}:{{ app_version[10:12] }}:{{ app_version[12:14] }} UTC
+            {% else %}
+                {{ app_version }}
+            {% endif %}
+        </small>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

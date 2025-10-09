@@ -1,0 +1,24 @@
+{
+    "_comment": "Photo Uploader Configuration File",
+    "_instructions": "Edit the values below to customize your photo uploader settings. Restart the application after making changes.",
+    
+    "server": {
+        "host": "0.0.0.0",
+        "port": 5001,
+        "debug": false
+    },
+    
+    "upload": {
+        "folder": "~/photo_uploads",
+        "max_file_size_mb": 10,
+        "allowed_extensions": ["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff"]
+    },
+    
+    "image_processing": {
+        "max_width": 1920,
+        "max_height": 1080,
+        "auto_rotate": true,
+        "optimize": true,
+        "quality": 85
+    }
+}

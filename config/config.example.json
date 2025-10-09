@@ -1,0 +1,27 @@
+{
+    "_comment": "Example Photo Uploader Configuration",
+    "_description": "Copy and customize this file as config.json",
+    
+    "server": {
+        "_comment": "Server settings",
+        "host": "127.0.0.1",
+        "port": 8080,
+        "debug": true
+    },
+    
+    "upload": {
+        "_comment": "Upload settings",
+        "folder": "./my_uploads",
+        "max_file_size_mb": 25,
+        "allowed_extensions": ["jpg", "jpeg", "png", "gif", "webp", "heic", "raw"]
+    },
+    
+    "image_processing": {
+        "_comment": "Image processing settings",
+        "max_width": 2560,
+        "max_height": 1920,
+        "auto_rotate": true,
+        "optimize": true,
+        "quality": 90
+    }
+}

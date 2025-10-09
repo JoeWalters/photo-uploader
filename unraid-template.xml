@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Photo-Uploader</Name>
+  <Repository>joewalters/photo-uploader:latest</Repository>
+  <Registry>https://hub.docker.com/r/joewalters/photo-uploader</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/JoeWalters/photo-uploader</Support>
+  <Project>https://github.com/JoeWalters/photo-uploader</Project>
+  <Overview>A web-based photo uploader with automatic image processing, resizing, and organization. Perfect for quickly uploading and managing photos with a clean, responsive interface.</Overview>
+  <Category>MediaApp:Photos</Category>
+  <WebUI>http://[IP]:[PORT:5001]</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/JoeWalters/photo-uploader/main/unraid-template.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/JoeWalters/photo-uploader/main/static/logo.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled></DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI Port" Target="5001" Default="5001" Mode="tcp" Description="Port for the web interface" Type="Port" Display="always" Required="true" Mask="false">5001</Config>
+  <Config Name="Config Directory" Target="/app/config" Default="/mnt/user/appdata/photo-uploader/config" Mode="rw" Description="Directory containing configuration files. Edit config.json to customize settings." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/photo-uploader/config</Config>
+  <Config Name="Upload Directory" Target="/app/uploads" Default="/mnt/user/photos/uploads" Mode="rw" Description="Directory where uploaded photos will be stored" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/photos/uploads</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID for file permissions" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID for file permissions" Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+  <Config Name="TZ" Target="TZ" Default="America/Chicago" Mode="" Description="Timezone (e.g. America/New_York)" Type="Variable" Display="advanced" Required="false" Mask="false">America/New_York</Config>
+  <Config Name="Max File Size (MB)" Target="MAX_FILE_SIZE" Default="10" Mode="" Description="Maximum file size for uploads in MB" Type="Variable" Display="advanced" Required="false" Mask="false">10</Config>
+</Container>

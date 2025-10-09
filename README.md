@@ -21,7 +21,12 @@ This is a good option for uploading files to a photo-slideshow.
   - Date (Oldest First)
   - Date (Newest First)
 - **Responsive Gallery**: Displays images in a grid layout with preview and details.
-- **Image Management**: Allows users to delete uploaded images, and to resize imgages to a max height and width.
+- **Image Management**: Allows users to delete uploaded images, and to resize images to a max height and width.
+- **Configuration Management**: Settings can be changed via web UI or command line arguments.
+- **File Size Limits**: Configurable maximum file size for uploads.
+- **Enhanced Security**: Filename sanitization and path traversal protection.
+- **Better Error Handling**: Comprehensive error handling with user feedback.
+- **Logging**: Application activity logging for debugging and monitoring.
 
 ## Technologies Used
 
@@ -37,9 +42,9 @@ This is a good option for uploading files to a photo-slideshow.
    git clone https://github.com/JoeWalters/photo-uploader.git
    cd photo-uploader
    ```
-2. **Install Flask**:
+2. **Install Dependencies**:
    ```bash
-   pip install flask
+   pip install -r requirements.txt
    ```
 3.	**Settings**:
     Here are some settings in the Python script which you might wish to change.
@@ -55,7 +60,73 @@ This is a good option for uploading files to a photo-slideshow.
    ```bash
    python3 photo_uploader.py
    ```
-   The application will be accessible at `http://<your-ip>:5000`.
+   The application will be accessible at `http://<your-ip>:5001`.
+
+## Docker Deployment
+
+### Quick Start with Docker
+```bash
+docker run -d \
+  --name photo-uploader \
+  -p 5001:5001 \
+  -v ./config:/app/config \
+  -v ./uploads:/app/uploads \
+  --restart unless-stopped \
+  joewalters/photo-uploader:latest
+```
+
+### Docker Compose
+```bash
+git clone https://github.com/JoeWalters/photo-uploader.git
+cd photo-uploader
+docker-compose up -d
+```
+
+### Unraid
+Search for "Photo Uploader" in Community Applications or see [DOCKER.md](DOCKER.md) for detailed setup instructions.
+
+**See [DOCKER.md](DOCKER.md) for complete Docker deployment guide.**
+
+### Command Line Options
+You can customize settings via command line arguments:
+```bash
+python3 photo_uploader.py --upload-folder ~/my_photos --port 8080 --host 127.0.0.1
+```
+
+Available options:
+- `--upload-folder`: Set upload directory path
+- `--port`: Set server port (default: 5001)
+- `--host`: Set server host (default: 0.0.0.0)
+- `--debug`: Enable debug mode
+- `--max-file-size`: Set maximum file size in MB
+
+### Configuration File
+Settings are stored in `config/config.json` and persist between runs. You can edit this file directly to customize your setup.
+
+#### Configuration Structure:
+```json
+{
+    "server": {
+        "host": "0.0.0.0",
+        "port": 5001,
+        "debug": false
+    },
+    "upload": {
+        "folder": "~/photo_uploads",
+        "max_file_size_mb": 10,
+        "allowed_extensions": ["png", "jpg", "jpeg", "gif", "webp"]
+    },
+    "image_processing": {
+        "max_width": 1920,
+        "max_height": 1080,
+        "auto_rotate": true,
+        "optimize": true,
+        "quality": 85
+    }
+}
+```
+
+See `config/README.md` for detailed configuration options.
 
 ## How to Use
 1.	**Settings**:
