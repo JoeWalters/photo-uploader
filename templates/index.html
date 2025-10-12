@@ -202,18 +202,34 @@ async function startBatchUpload(files) {
     
     // Upload complete
     uploadInProgress = false;
-    updateStatus('Upload complete!');
     
     // Show final results
     showUploadResults();
     
-    // Reset form after a delay
-    setTimeout(() => {
-        hideProgressUI();
-        document.getElementById("fileInput").value = '';
-        document.getElementById("batchInfo").classList.add("d-none");
-        document.getElementById("uploadBtn").textContent = "Upload";
-    }, 3000);
+    // Auto-refresh if files were actually uploaded
+    if (uploadStats.uploaded > 0) {
+        // Countdown before automatic refresh
+        let countdown = 2;
+        const countdownInterval = setInterval(() => {
+            updateStatus(`Upload complete! Refreshing in ${countdown} seconds...`);
+            countdown--;
+            if (countdown < 0) {
+                clearInterval(countdownInterval);
+                window.location.reload();
+            }
+        }, 1000);
+    } else {
+        // No files uploaded, just show completion message
+        updateStatus('Upload complete! No files were uploaded.');
+        // Reset form after a delay
+        setTimeout(() => {
+            hideProgressUI();
+            document.getElementById("fileInput").value = '';
+            document.getElementById("batchInfo").classList.add("d-none");
+            document.getElementById("uploadBtn").textContent = "Upload";
+            document.getElementById("uploadBtn").disabled = false;
+        }, 3000);
+    }
 }
 
 async function uploadBatch(files) {
@@ -266,8 +282,11 @@ async function uploadSingleBatch(files) {
         });
         
         if (response.ok) {
-            // Redirect to refresh the page and show results
-            window.location.reload();
+            // Show brief success message then refresh
+            uploadBtn.innerHTML = '<span class="text-success">✓ Upload Complete!</span>';
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
         } else {
             throw new Error(`Upload failed: ${response.status}`);
         }

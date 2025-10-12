@@ -140,6 +140,7 @@ When uploading more than 50 photos (configurable), the application automatically
 - **Automatic Detection**: When you select more than 50 files, the UI will indicate batch processing will be used
 - **Client-Side Batching**: Large uploads are split into smaller HTTP requests (25 files max per request) to prevent "413 Request Entity Too Large" errors
 - **Real-Time Progress**: Progress bar and counters update as each batch completes
+- **Auto-Refresh**: Page automatically refreshes after successful uploads to show new photos
 - **Error Resilience**: If one batch fails, the remaining batches continue processing
 - **No Server Timeouts**: Small batch sizes prevent HTTP request timeouts
 
