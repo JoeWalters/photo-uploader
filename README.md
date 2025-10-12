@@ -138,12 +138,10 @@ When uploading more than 50 photos (configurable), the application automatically
 
 ### How It Works
 - **Automatic Detection**: When you select more than 50 files, the UI will indicate batch processing will be used
-- **Smart Batching**: Files are processed in smaller groups (default: 50 files per batch)
-- **Progress Tracking**: For very large uploads, you'll see a real-time progress page showing:
-  - Current batch being processed
-  - Number of files uploaded, skipped, and any errors
-  - Overall progress percentage
-- **Background Processing**: Extremely large uploads run in the background, allowing you to monitor progress without blocking the interface
+- **Client-Side Batching**: Large uploads are split into smaller HTTP requests (25 files max per request) to prevent "413 Request Entity Too Large" errors
+- **Real-Time Progress**: Progress bar and counters update as each batch completes
+- **Error Resilience**: If one batch fails, the remaining batches continue processing
+- **No Server Timeouts**: Small batch sizes prevent HTTP request timeouts
 
 ### Configuration
 - **Batch Size**: Adjustable in Settings (default: 50 files per batch)
@@ -151,10 +149,11 @@ When uploading more than 50 photos (configurable), the application automatically
 - **Progress Display**: Uploads over 100 files automatically show the progress page
 
 ### Benefits
-- **Prevents Timeouts**: Large uploads won't fail due to HTTP request timeouts
-- **Better Error Handling**: Individual file failures don't stop the entire upload
-- **Resource Management**: Prevents memory issues when processing hundreds of photos
-- **User Feedback**: Clear progress indication for long-running uploads
+- **Eliminates 413 Errors**: No more "Request Entity Too Large" errors when uploading hundreds of files
+- **Prevents Timeouts**: Small batch sizes prevent HTTP request timeouts
+- **Better Error Handling**: Individual batch failures don't stop the entire upload
+- **Real-Time Feedback**: Live progress updates show exactly what's happening
+- **Scalable**: Can handle thousands of photos without server resource issues
 
 ## How to Use
 1.	**Settings**:

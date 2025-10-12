@@ -24,7 +24,7 @@
     <!-- Upload Form -->
     <form id="uploadForm" action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data" class="mb-4">
         <div class="input-group">
-            <input type="file" name="files" multiple class="form-control" id="fileInput">
+            <input type="file" name="files" multiple class="form-control" id="fileInput" accept="image/*">
             <button type="submit" class="btn btn-primary" id="uploadBtn">Upload</button>
         </div>
         <div id="uploadAlert" class="mt-2 d-none alert alert-danger" role="alert">
@@ -32,6 +32,35 @@
         </div>
         <div id="batchInfo" class="mt-2 d-none alert alert-info" role="alert">
             <strong>Large batch detected!</strong> Files will be automatically processed in batches to ensure reliable upload.
+        </div>
+        <div id="uploadProgress" class="mt-2 d-none">
+            <div class="progress mb-2" style="height: 25px;">
+                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                     role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    0%
+                </div>
+            </div>
+            <div class="row text-center">
+                <div class="col-3">
+                    <small class="text-muted">Uploaded</small>
+                    <div id="uploadedCount" class="fw-bold text-success">0</div>
+                </div>
+                <div class="col-3">
+                    <small class="text-muted">Skipped</small>
+                    <div id="skippedCount" class="fw-bold text-warning">0</div>
+                </div>
+                <div class="col-3">
+                    <small class="text-muted">Errors</small>
+                    <div id="errorCount" class="fw-bold text-danger">0</div>
+                </div>
+                <div class="col-3">
+                    <small class="text-muted">Remaining</small>
+                    <div id="remainingCount" class="fw-bold text-primary">0</div>
+                </div>
+            </div>
+            <div class="text-center mt-2">
+                <small id="currentStatus" class="text-muted">Preparing upload...</small>
+            </div>
         </div>
     </form>
 
@@ -66,39 +95,247 @@
 </div>
 
 <script>
-    // File input change handler
-    document.getElementById("fileInput").addEventListener("change", function () {
-        const fileInput = this;
-        const batchInfo = document.getElementById("batchInfo");
-        const uploadBtn = document.getElementById("uploadBtn");
+let uploadInProgress = false;
+let currentBatch = 0;
+let totalBatches = 0;
+let uploadStats = {
+    uploaded: 0,
+    skipped: 0,
+    errors: 0,
+    total: 0
+};
+let configBatchSize = 50; // Default, will be loaded from server
+
+// Load configuration from server
+async function loadConfig() {
+    try {
+        const response = await fetch('/config');
+        const config = await response.json();
+        configBatchSize = config.batch_size || 50;
+    } catch (error) {
+        console.warn('Could not load config, using defaults:', error);
+    }
+}
+
+// File input change handler
+document.getElementById("fileInput").addEventListener("change", function () {
+    const fileInput = this;
+    const batchInfo = document.getElementById("batchInfo");
+    const uploadBtn = document.getElementById("uploadBtn");
+    
+    if (fileInput.files.length > configBatchSize) {
+        batchInfo.classList.remove("d-none");
+        uploadBtn.textContent = "Upload Batch";
+    } else {
+        batchInfo.classList.add("d-none");
+        uploadBtn.textContent = "Upload";
+    }
+});
+
+// Upload form submission handler
+document.getElementById("uploadForm").addEventListener("submit", function (event) {
+    event.preventDefault(); // Always prevent default form submission
+    
+    const fileInput = document.getElementById("fileInput");
+    const alertBox = document.getElementById("uploadAlert");
+    
+    if (!fileInput.files.length) {
+        alertBox.classList.remove("d-none");
+        return;
+    }
+    
+    alertBox.classList.add("d-none");
+    
+    const files = Array.from(fileInput.files);
+    
+    if (files.length > configBatchSize) {
+        // Use client-side batching for large uploads
+        startBatchUpload(files);
+    } else {
+        // Use normal form submission for small uploads
+        uploadSingleBatch(files);
+    }
+});
+
+async function startBatchUpload(files) {
+    uploadInProgress = true;
+    const batchSize = Math.min(25, Math.floor(configBatchSize / 2)); // Smaller batches to avoid HTTP limits
+    totalBatches = Math.ceil(files.length / batchSize);
+    currentBatch = 0;
+    
+    // Reset stats
+    uploadStats = {
+        uploaded: 0,
+        skipped: 0,
+        errors: 0,
+        total: files.length
+    };
+    
+    // Show progress UI
+    showProgressUI();
+    updateProgress();
+    
+    // Process files in batches
+    for (let i = 0; i < files.length; i += batchSize) {
+        if (!uploadInProgress) break; // Allow cancellation
         
-        if (fileInput.files.length > 50) {
-            batchInfo.classList.remove("d-none");
-            uploadBtn.textContent = "Upload Batch";
-        } else {
-            batchInfo.classList.add("d-none");
-            uploadBtn.textContent = "Upload";
+        currentBatch++;
+        const batch = files.slice(i, i + batchSize);
+        
+        updateStatus(`Processing batch ${currentBatch} of ${totalBatches}...`);
+        
+        try {
+            const result = await uploadBatch(batch);
+            uploadStats.uploaded += result.uploaded || 0;
+            uploadStats.skipped += result.skipped || 0;
+            uploadStats.errors += result.errors || 0;
+        } catch (error) {
+            console.error('Batch upload error:', error);
+            uploadStats.errors += batch.length;
         }
+        
+        updateProgress();
+        
+        // Small delay between batches to prevent overwhelming the server
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    // Upload complete
+    uploadInProgress = false;
+    updateStatus('Upload complete!');
+    
+    // Show final results
+    showUploadResults();
+    
+    // Reset form after a delay
+    setTimeout(() => {
+        hideProgressUI();
+        document.getElementById("fileInput").value = '';
+        document.getElementById("batchInfo").classList.add("d-none");
+        document.getElementById("uploadBtn").textContent = "Upload";
+    }, 3000);
+}
+
+async function uploadBatch(files) {
+    const formData = new FormData();
+    
+    files.forEach(file => {
+        formData.append('files', file);
     });
+    
+    const response = await fetch('/upload', {
+        method: 'POST',
+        body: formData
+    });
+    
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    // Parse response to extract upload results
+    const text = await response.text();
+    
+    // Simple parsing of flash messages to get counts
+    const uploadedMatch = text.match(/Successfully uploaded (\d+) file/);
+    const skippedMatch = text.match(/Skipped (\d+) file/);
+    const errorMatch = text.match(/Failed to upload (\d+) file/);
+    
+    return {
+        uploaded: uploadedMatch ? parseInt(uploadedMatch[1]) : files.length,
+        skipped: skippedMatch ? parseInt(skippedMatch[1]) : 0,
+        errors: errorMatch ? parseInt(errorMatch[1]) : 0
+    };
+}
 
-    // Prevent form submission if no files are selected
-    document.getElementById("uploadForm").addEventListener("submit", function (event) {
-        const fileInput = document.getElementById("fileInput");
-        const alertBox = document.getElementById("uploadAlert");
-        const uploadBtn = document.getElementById("uploadBtn");
-
-        if (!fileInput.files.length) {
-            event.preventDefault(); // Stop form submission
-            alertBox.classList.remove("d-none"); // Show alert box
+async function uploadSingleBatch(files) {
+    const uploadBtn = document.getElementById("uploadBtn");
+    const originalText = uploadBtn.textContent;
+    
+    uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading...';
+    uploadBtn.disabled = true;
+    
+    try {
+        const formData = new FormData();
+        files.forEach(file => {
+            formData.append('files', file);
+        });
+        
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            // Redirect to refresh the page and show results
+            window.location.reload();
         } else {
-            alertBox.classList.add("d-none"); // Hide alert box
-            
-            // Show loading state for large batches
-            if (fileInput.files.length > 50) {
-                uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
-                uploadBtn.disabled = true;
-            }
+            throw new Error(`Upload failed: ${response.status}`);
         }
-    });
+    } catch (error) {
+        console.error('Upload error:', error);
+        alert('Upload failed. Please try again.');
+    } finally {
+        uploadBtn.textContent = originalText;
+        uploadBtn.disabled = false;
+    }
+}
+
+function showProgressUI() {
+    document.getElementById("uploadProgress").classList.remove("d-none");
+    document.getElementById("uploadBtn").innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading...';
+    document.getElementById("uploadBtn").disabled = true;
+}
+
+function hideProgressUI() {
+    document.getElementById("uploadProgress").classList.add("d-none");
+    document.getElementById("uploadBtn").disabled = false;
+}
+
+function updateProgress() {
+    const processed = uploadStats.uploaded + uploadStats.skipped + uploadStats.errors;
+    const percentage = uploadStats.total > 0 ? (processed / uploadStats.total) * 100 : 0;
+    
+    document.getElementById("progressBar").style.width = percentage + '%';
+    document.getElementById("progressBar").textContent = Math.round(percentage) + '%';
+    
+    document.getElementById("uploadedCount").textContent = uploadStats.uploaded;
+    document.getElementById("skippedCount").textContent = uploadStats.skipped;
+    document.getElementById("errorCount").textContent = uploadStats.errors;
+    document.getElementById("remainingCount").textContent = uploadStats.total - processed;
+}
+
+function updateStatus(message) {
+    document.getElementById("currentStatus").textContent = message;
+}
+
+function showUploadResults() {
+    let message = `Upload completed! `;
+    if (uploadStats.uploaded > 0) {
+        message += `${uploadStats.uploaded} uploaded`;
+    }
+    if (uploadStats.skipped > 0) {
+        message += `, ${uploadStats.skipped} skipped`;
+    }
+    if (uploadStats.errors > 0) {
+        message += `, ${uploadStats.errors} errors`;
+    }
+    
+    updateStatus(message);
+    
+    // Change progress bar color based on results
+    const progressBar = document.getElementById("progressBar");
+    if (uploadStats.errors === 0) {
+        progressBar.className = 'progress-bar bg-success';
+    } else if (uploadStats.uploaded > 0) {
+        progressBar.className = 'progress-bar bg-warning';
+    } else {
+        progressBar.className = 'progress-bar bg-danger';
+    }
+}
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    loadConfig();
+});
 </script>
 {% endblock %}

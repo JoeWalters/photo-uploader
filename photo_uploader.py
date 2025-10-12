@@ -368,24 +368,40 @@ def upload_file():
     """Route for uploading images."""
     try:
         if 'files' not in request.files:
-            flash("No file part in request", "error")
-            return redirect(url_for('index'))
+            return jsonify({"error": "No file part in request"}), 400
 
         files = request.files.getlist('files')
         if not files or all(file.filename == '' for file in files):
-            flash("No files selected", "error")
-            return redirect(url_for('index'))
+            return jsonify({"error": "No files selected"}), 400
 
-        # Check if we need batch processing
-        batch_size = config.get('upload', {}).get('batch_size', 50)
-        if len(files) > batch_size:
-            return handle_batch_upload(files, batch_size)
+        # Process the files (now always a manageable batch size from client)
+        uploaded, skipped, errors = process_files_batch(files)
         
-        # Handle normal upload for smaller batches
-        return process_upload_batch(files)
+        # For AJAX requests, return JSON response
+        if request.headers.get('Content-Type', '').startswith('multipart/form-data') and not request.form.get('redirect'):
+            return jsonify({
+                "uploaded": uploaded,
+                "skipped": skipped, 
+                "errors": errors,
+                "total": len(files)
+            })
+        
+        # For regular form submissions, use flash messages and redirect
+        if uploaded > 0:
+            flash(f"Successfully uploaded {uploaded} file(s)", "success")
+        if skipped > 0:
+            flash(f"Skipped {skipped} file(s) (invalid type or name)", "warning")
+        if errors > 0:
+            flash(f"Failed to upload {errors} file(s)", "error")
+
+        return redirect(url_for('index'))
         
     except Exception as e:
         logger.error(f"Unexpected error in upload: {e}")
+        # For AJAX requests, return JSON error
+        if request.headers.get('Content-Type', '').startswith('multipart/form-data') and not request.form.get('redirect'):
+            return jsonify({"error": "Upload failed"}), 500
+        # For regular requests, use flash message
         flash("An unexpected error occurred during upload", "error")
         return redirect(url_for('index'))
 
@@ -800,6 +816,15 @@ def batch_progress_page(batch_id):
     
     status = batch_upload_status[batch_id]
     return render_template('batch_progress.html', batch_id=batch_id, status=status)
+
+@app.route('/config')
+def get_config():
+    """API endpoint to get current configuration"""
+    return jsonify({
+        'batch_size': app.config['APP_CONFIG']['upload'].get('batch_size', 50),
+        'max_file_size_mb': app.config['APP_CONFIG']['upload'].get('max_file_size_mb', 10),
+        'allowed_extensions': app.config['APP_CONFIG']['upload'].get('allowed_extensions', [])
+    })
 
 @app.route('/version')
 def version():
