@@ -330,12 +330,12 @@ def index():
     try:
         if not os.path.exists(app.config['UPLOAD_FOLDER']):
             flash('Upload folder does not exist. Please check settings.', 'error')
-            return render_template('index.html', images=[], sort_by='name', sort_order='asc')
+            return render_template('index.html', images=[], sort_by='date', sort_order='desc')
         
         files = os.listdir(app.config['UPLOAD_FOLDER'])
         images = [file for file in files if allowed_file(file)]
-        sort_by = request.args.get('sort_by', 'name')  # Default sort by name
-        sort_order = request.args.get('sort_order', 'asc')  # Default order is ascending
+        sort_by = request.args.get('sort_by', 'date')  # Default sort by date
+        sort_order = request.args.get('sort_order', 'desc')  # Default order is newest first
         
         image_metadata = []
         for image in images:
@@ -355,13 +355,21 @@ def index():
         elif sort_by == 'size':
             reverse_order = sort_order == 'desc'
             image_metadata.sort(key=lambda x: x['size'], reverse=reverse_order)
+        elif sort_by == 'dimensions':
+            reverse_order = sort_order == 'desc'
+            # Sort by total pixel count (width * height)
+            image_metadata.sort(key=lambda x: (x['width'] or 0) * (x['height'] or 0), reverse=reverse_order)
+        elif sort_by == 'aspect':
+            reverse_order = sort_order == 'desc'
+            # Sort by aspect ratio (width/height)
+            image_metadata.sort(key=lambda x: (x['width'] or 1) / (x['height'] or 1) if x['width'] and x['height'] else 0, reverse=reverse_order)
 
         return render_template('index.html', images=image_metadata, sort_by=sort_by, sort_order=sort_order)
     
     except Exception as e:
         logger.error(f"Error in index route: {e}")
         flash('An error occurred while loading the gallery.', 'error')
-        return render_template('index.html', images=[], sort_by='name', sort_order='asc')
+        return render_template('index.html', images=[], sort_by='date', sort_order='desc')
 
 @app.route('/upload', methods=['POST'])
 def upload_file():

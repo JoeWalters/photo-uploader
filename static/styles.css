@@ -248,3 +248,25 @@ button:hover {
         padding: 0.25rem 0.5rem;
     }
 }
+
+/* Search and Filter Improvements */
+.dropdown-header {
+    color: #495057;
+    font-weight: 600;
+}
+
+.dropdown-item.active {
+    background-color: #007bff;
+    color: white;
+}
+
+.dropdown-item i {
+    width: 16px;
+    margin-right: 8px;
+}
+
+/* Grid View Transitions */
+.photo-grid .col {
+    transition: all 0.3s ease;
+}
+

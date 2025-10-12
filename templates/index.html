@@ -5,19 +5,80 @@
     <h1 class="text-center text-shadow mb-4 fw-bold">Image Gallery</h1>
 
     <!-- Sorting Options -->
-    <div class="d-flex justify-content-center mb-3">
-        <div class="dropdown">
-            <button class="btn btn-outline-primary dropdown-toggle" type="button" id="sortDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                Sort Options
-            </button>
-            <ul class="dropdown-menu" aria-labelledby="sortDropdown">
-                <li><a class="dropdown-item" href="{{ url_for('index', sort_by='name', sort_order='asc') }}">Sort by Name (A-Z)</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('index', sort_by='name', sort_order='desc') }}">Sort by Name (Z-A)</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('index', sort_by='date', sort_order='asc') }}">Sort by Date (Oldest First)</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('index', sort_by='date', sort_order='desc') }}">Sort by Date (Newest First)</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('index', sort_by='size', sort_order='asc') }}">Sort by Size (Smallest First)</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('index', sort_by='size', sort_order='desc') }}">Sort by Size (Largest First)</a></li>
-            </ul>
+    <div class="row mb-3">
+        <div class="col-12">
+            <!-- Sort Options -->
+            <div class="d-flex justify-content-end">
+                <div class="dropdown me-2">
+                    <button class="btn btn-outline-primary dropdown-toggle" type="button" id="sortDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-sort-down"></i> Sort: {{ sort_by.title() }} ({{ 'A-Z' if sort_order == 'asc' else 'Z-A' if sort_by == 'name' else 'New-Old' if sort_order == 'desc' else 'Old-New' }})
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="sortDropdown">
+                        <li><h6 class="dropdown-header">By Name</h6></li>
+                        <li><a class="dropdown-item{{ ' active' if sort_by == 'name' and sort_order == 'asc' }}" href="{{ url_for('index', sort_by='name', sort_order='asc') }}">
+                            <i class="bi bi-sort-alpha-down"></i> Name (A-Z)
+                        </a></li>
+                        <li><a class="dropdown-item{{ ' active' if sort_by == 'name' and sort_order == 'desc' }}" href="{{ url_for('index', sort_by='name', sort_order='desc') }}">
+                            <i class="bi bi-sort-alpha-up"></i> Name (Z-A)
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">By Date</h6></li>
+                        <li><a class="dropdown-item{{ ' active' if sort_by == 'date' and sort_order == 'desc' }}" href="{{ url_for('index', sort_by='date', sort_order='desc') }}">
+                            <i class="bi bi-calendar-plus"></i> Newest First
+                        </a></li>
+                        <li><a class="dropdown-item{{ ' active' if sort_by == 'date' and sort_order == 'asc' }}" href="{{ url_for('index', sort_by='date', sort_order='asc') }}">
+                            <i class="bi bi-calendar-minus"></i> Oldest First
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">By Size</h6></li>
+                        <li><a class="dropdown-item{{ ' active' if sort_by == 'size' and sort_order == 'desc' }}" href="{{ url_for('index', sort_by='size', sort_order='desc') }}">
+                            <i class="bi bi-arrow-up"></i> Largest First
+                        </a></li>
+                        <li><a class="dropdown-item{{ ' active' if sort_by == 'size' and sort_order == 'asc' }}" href="{{ url_for('index', sort_by='size', sort_order='asc') }}">
+                            <i class="bi bi-arrow-down"></i> Smallest First
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">By Dimensions</h6></li>
+                        <li><a class="dropdown-item{{ ' active' if sort_by == 'dimensions' and sort_order == 'desc' }}" href="{{ url_for('index', sort_by='dimensions', sort_order='desc') }}">
+                            <i class="bi bi-arrows-fullscreen"></i> Highest Resolution
+                        </a></li>
+                        <li><a class="dropdown-item{{ ' active' if sort_by == 'dimensions' and sort_order == 'asc' }}" href="{{ url_for('index', sort_by='dimensions', sort_order='asc') }}">
+                            <i class="bi bi-arrows-angle-contract"></i> Lowest Resolution
+                        </a></li>
+                        <li><a class="dropdown-item{{ ' active' if sort_by == 'aspect' and sort_order == 'desc' }}" href="{{ url_for('index', sort_by='aspect', sort_order='desc') }}">
+                            <i class="bi bi-aspect-ratio"></i> Widest First
+                        </a></li>
+                        <li><a class="dropdown-item{{ ' active' if sort_by == 'aspect' and sort_order == 'asc' }}" href="{{ url_for('index', sort_by='aspect', sort_order='asc') }}">
+                            <i class="bi bi-phone"></i> Tallest First
+                        </a></li>
+                    </ul>
+                </div>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="viewDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-grid-3x3-gap"></i> View
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="viewDropdown">
+                        <li><a class="dropdown-item" href="#" onclick="setGridSize(2)">
+                            <i class="bi bi-grid"></i> Large (2 columns)
+                        </a></li>
+                        <li><a class="dropdown-item active" href="#" onclick="setGridSize(4)">
+                            <i class="bi bi-grid-3x3-gap"></i> Medium (4 columns)
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="setGridSize(6)">
+                            <i class="bi bi-grid-3x3-gap-fill"></i> Small (6 columns)
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Info -->
+    <div class="row mb-2">
+        <div class="col">
+            <small class="text-muted">
+                <span id="photoCount">{{ images|length }}</span> photo(s)
+            </small>
         </div>
     </div>
 
@@ -65,24 +126,26 @@
     </form>
 
     <!-- Image Grid -->
-    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4">
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 photo-grid">
         {% for image in images %}
-        <div class="col mb-4">
+        <div class="col mb-4 photo-card-container">
             <div class="card shadow-sm photo-card">
                 <div class="card-img-container">
-                    <img src="{{ url_for('uploaded_file', filename=image['name']) }}" class="card-img-top" alt="{{ image['name'] }}">
+                    <img src="{{ url_for('uploaded_file', filename=image['name']) }}" class="card-img-top" alt="{{ image['name'] }}" loading="lazy">
                 </div>
                 <div class="card-body text-center">
-                    <h5 class="card-title text-truncate">{{ image['name'] }}</h5>
+                    <h5 class="card-title text-truncate" title="{{ image['name'] }}">{{ image['name'] }}</h5>
                     <p class="card-text text-muted small">
-                        Uploaded: {{ image['mod_time'].strftime('%Y-%m-%d %H:%M:%S') }}<br>
-                        Size: {{ image['size_mb'] }}MB
+                        <i class="bi bi-calendar3"></i> {{ image['mod_time'].strftime('%m/%d/%Y') }}<br>
+                        <i class="bi bi-file-earmark"></i> {{ image['size_mb'] }}MB
                         {% if image['width'] and image['height'] %}
-                        <br>Dimensions: {{ image['width'] }}x{{ image['height'] }}
+                        <br><i class="bi bi-aspect-ratio"></i> {{ image['width'] }}×{{ image['height'] }}
                         {% endif %}
                     </p>
-                    <form action="{{ url_for('delete_file', filename=image['name']) }}" method="POST">
-                        <button type="submit" class="btn btn-danger btn-sm w-100">Delete</button>
+                    <form action="{{ url_for('delete_file', filename=image['name']) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this photo?')"
+                        <button type="submit" class="btn btn-danger btn-sm w-100">
+                            <i class="bi bi-trash"></i> Delete
+                        </button>
                     </form>
                 </div>
             </div>
@@ -354,9 +417,38 @@ function showUploadResults() {
     }
 }
 
+function setGridSize(columns) {
+    const container = document.querySelector('.photo-grid');
+    const colClass = `row-cols-lg-${columns}`;
+    
+    // Remove existing column classes
+    container.className = container.className.replace(/row-cols-lg-\d+/g, '');
+    
+    // Add new column class
+    container.classList.add(colClass);
+    
+    // Update active state in dropdown
+    document.querySelectorAll('#viewDropdown + .dropdown-menu .dropdown-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // Store preference in localStorage
+    localStorage.setItem('gridSize', columns);
+}
+
+// Load saved grid size preference
+function loadGridPreference() {
+    const savedSize = localStorage.getItem('gridSize');
+    if (savedSize) {
+        setGridSize(parseInt(savedSize));
+    }
+}
+
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
     loadConfig();
+    loadGridPreference();
 });
 </script>
 {% endblock %}
