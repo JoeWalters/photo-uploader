@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="text-center text-shadow mb-4 fw-bold">Batch Upload Progress</h1>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-body">
+                    <div id="progress-container">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="card-title mb-0">Upload Progress</h5>
+                            <span id="status-badge" class="badge bg-primary">Processing</span>
+                        </div>
+                        
+                        <!-- Progress Bar -->
+                        <div class="progress mb-3" style="height: 25px;">
+                            <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                0%
+                            </div>
+                        </div>
+                        
+                        <!-- Status Information -->
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <div class="border rounded p-2">
+                                    <h6 class="text-muted mb-1">Total Files</h6>
+                                    <span id="total-files" class="h5">{{ status.total_files if status else 0 }}</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="border rounded p-2">
+                                    <h6 class="text-success mb-1">Uploaded</h6>
+                                    <span id="uploaded-count" class="h5 text-success">0</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="border rounded p-2">
+                                    <h6 class="text-warning mb-1">Skipped</h6>
+                                    <span id="skipped-count" class="h5 text-warning">0</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="border rounded p-2">
+                                    <h6 class="text-danger mb-1">Errors</h6>
+                                    <span id="error-count" class="h5 text-danger">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Batch Information -->
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                Batch <span id="current-batch">0</span> of <span id="total-batches">{{ status.total_batches if status else 0 }}</span>
+                            </small>
+                        </div>
+                        
+                        <!-- Completion Message -->
+                        <div id="completion-message" class="alert mt-3" style="display: none;">
+                            <h6>Upload Complete!</h6>
+                            <p class="mb-0">Your files have been processed successfully.</p>
+                        </div>
+                        
+                        <!-- Error Message -->
+                        <div id="error-message" class="alert alert-danger mt-3" style="display: none;">
+                            <h6>Upload Error</h6>
+                            <p class="mb-0">An error occurred during the upload process.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="text-center mt-4">
+                        <a href="{{ url_for('index') }}" id="view-gallery-btn" class="btn btn-primary" style="display: none;">
+                            View Gallery
+                        </a>
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                            Back to Gallery
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const batchId = '{{ batch_id }}';
+    let polling = true;
+    
+    // Update progress display
+    function updateProgress(status) {
+        // Update progress bar
+        const progressPercent = status.progress_percent || 0;
+        const progressBar = document.getElementById('progress-bar');
+        progressBar.style.width = progressPercent + '%';
+        progressBar.setAttribute('aria-valuenow', progressPercent);
+        progressBar.textContent = Math.round(progressPercent) + '%';
+        
+        // Update status badge
+        const statusBadge = document.getElementById('status-badge');
+        if (status.status === 'completed') {
+            statusBadge.textContent = 'Completed';
+            statusBadge.className = 'badge bg-success';
+            progressBar.className = 'progress-bar bg-success';
+        } else if (status.status === 'error') {
+            statusBadge.textContent = 'Error';
+            statusBadge.className = 'badge bg-danger';
+            progressBar.className = 'progress-bar bg-danger';
+        } else {
+            statusBadge.textContent = 'Processing';
+            statusBadge.className = 'badge bg-primary';
+        }
+        
+        // Update counters
+        document.getElementById('uploaded-count').textContent = status.uploaded || 0;
+        document.getElementById('skipped-count').textContent = status.skipped || 0;
+        document.getElementById('error-count').textContent = status.errors || 0;
+        document.getElementById('current-batch').textContent = status.current_batch || 0;
+        document.getElementById('total-batches').textContent = status.total_batches || 0;
+        
+        // Show completion or error message
+        if (status.completed) {
+            polling = false;
+            if (status.status === 'completed') {
+                document.getElementById('completion-message').style.display = 'block';
+                document.getElementById('view-gallery-btn').style.display = 'inline-block';
+            } else if (status.status === 'error') {
+                document.getElementById('error-message').style.display = 'block';
+            }
+        }
+    }
+    
+    // Poll for status updates
+    function pollStatus() {
+        if (!polling) return;
+        
+        fetch(`/batch-status/${batchId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    console.error('Batch not found:', data.error);
+                    polling = false;
+                    return;
+                }
+                updateProgress(data);
+                
+                // Continue polling if not completed
+                if (polling) {
+                    setTimeout(pollStatus, 1000); // Poll every second
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching status:', error);
+                // Continue polling on network errors
+                if (polling) {
+                    setTimeout(pollStatus, 2000); // Poll less frequently on errors
+                }
+            });
+    }
+    
+    // Start polling
+    pollStatus();
+});
+</script>
+{% endblock %}

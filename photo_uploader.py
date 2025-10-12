@@ -4,6 +4,9 @@ import sys
 import logging
 import json
 import argparse
+import threading
+import time
+import uuid
 from pathlib import Path
 from werkzeug.utils import secure_filename
 from flask import Flask, request, redirect, render_template, url_for, send_from_directory, flash, jsonify
@@ -67,7 +70,8 @@ def load_config():
         "upload": {
             "folder": "~/photo_uploads",
             "max_file_size_mb": 10,
-            "allowed_extensions": ["png", "jpg", "jpeg", "gif", "webp"]
+            "allowed_extensions": ["png", "jpg", "jpeg", "gif", "webp"],
+            "batch_size": 50
         },
         "image_processing": {
             "max_width": 1920,
@@ -203,6 +207,9 @@ app.config['APP_CONFIG'] = config
 # Get and store application version
 app_version = get_app_version()
 app.config['APP_VERSION'] = app_version
+
+# Global dictionary to track batch upload progress
+batch_upload_status = {}
 
 # Template context processor to make version available in all templates
 @app.context_processor
@@ -369,70 +376,221 @@ def upload_file():
             flash("No files selected", "error")
             return redirect(url_for('index'))
 
-        uploaded_count = 0
-        skipped_count = 0
-        error_count = 0
-
-        for file in files:
-            if file and file.filename != '':
-                original_filename = file.filename
-                
-                if not allowed_file(original_filename):
-                    logger.warning(f"File type not allowed: {original_filename}")
-                    skipped_count += 1
-                    continue
-                
-                # Secure the filename
-                filename = secure_filename(original_filename)
-                if not filename:
-                    logger.warning(f"Invalid filename after sanitization: {original_filename}")
-                    skipped_count += 1
-                    continue
-                
-                try:
-                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    
-                    # Check if file already exists and handle duplicates
-                    if os.path.exists(file_path):
-                        name, ext = os.path.splitext(filename)
-                        counter = 1
-                        while os.path.exists(file_path):
-                            filename = f"{name}_{counter}{ext}"
-                            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                            counter += 1
-                    
-                    # Save the file
-                    file.save(file_path)
-                    logger.info(f"Saved file: {filename}")
-                    
-                    # Resize the image
-                    resize_image(file_path)
-                    uploaded_count += 1
-                    
-                except Exception as e:
-                    logger.error(f"Failed to upload {original_filename}: {e}")
-                    error_count += 1
-                    # Clean up partially uploaded file
-                    if os.path.exists(file_path):
-                        try:
-                            os.remove(file_path)
-                        except:
-                            pass
-
-        # Provide feedback to user
-        if uploaded_count > 0:
-            flash(f"Successfully uploaded {uploaded_count} file(s)", "success")
-        if skipped_count > 0:
-            flash(f"Skipped {skipped_count} file(s) (invalid type or name)", "warning")
-        if error_count > 0:
-            flash(f"Failed to upload {error_count} file(s)", "error")
-
-        return redirect(url_for('index'))
+        # Check if we need batch processing
+        batch_size = config.get('upload', {}).get('batch_size', 50)
+        if len(files) > batch_size:
+            return handle_batch_upload(files, batch_size)
+        
+        # Handle normal upload for smaller batches
+        return process_upload_batch(files)
         
     except Exception as e:
         logger.error(f"Unexpected error in upload: {e}")
         flash("An unexpected error occurred during upload", "error")
         return redirect(url_for('index'))
+
+def handle_batch_upload(files, batch_size=50):
+    """Handle batch upload for large number of files."""
+    try:
+        total_files = len(files)
+        total_batches = (total_files + batch_size - 1) // batch_size  # Ceiling division
+        
+        # Generate unique batch ID for tracking
+        batch_id = str(uuid.uuid4())
+        
+        # Initialize batch status
+        batch_upload_status[batch_id] = {
+            'total_files': total_files,
+            'total_batches': total_batches,
+            'current_batch': 0,
+            'uploaded': 0,
+            'skipped': 0,
+            'errors': 0,
+            'completed': False,
+            'start_time': datetime.now(),
+            'status': 'processing'
+        }
+        
+        logger.info(f"Starting batch upload {batch_id}: {total_files} files in {total_batches} batches")
+        
+        # Start batch processing in background thread for large uploads
+        if total_files > batch_size * 2:  # Use background processing for very large uploads
+            thread = threading.Thread(target=process_batch_background, args=(batch_id, files, batch_size))
+            thread.daemon = True
+            thread.start()
+            
+            # Return immediately with batch tracking info
+            flash(f"Large batch upload started ({total_files} files). Processing in background...", "info")
+            return render_template('batch_progress.html', batch_id=batch_id, total_files=total_files)
+        else:
+            # Process synchronously for moderate batches
+            return process_batch_synchronous(batch_id, files, batch_size)
+        
+    except Exception as e:
+        logger.error(f"Error in batch upload: {e}")
+        flash("An error occurred during batch upload", "error")
+        return redirect(url_for('index'))
+
+def process_batch_synchronous(batch_id, files, batch_size):
+    """Process batch upload synchronously."""
+    try:
+        status = batch_upload_status[batch_id]
+        total_batches = status['total_batches']
+        
+        # Process files in batches
+        for batch_num in range(total_batches):
+            start_idx = batch_num * batch_size
+            end_idx = min(start_idx + batch_size, len(files))
+            batch_files = files[start_idx:end_idx]
+            
+            logger.info(f"Processing batch {batch_num + 1}/{total_batches} ({len(batch_files)} files)")
+            
+            # Update status
+            status['current_batch'] = batch_num + 1
+            
+            # Process this batch
+            uploaded, skipped, errors = process_files_batch(batch_files)
+            status['uploaded'] += uploaded
+            status['skipped'] += skipped
+            status['errors'] += errors
+        
+        # Mark as completed
+        status['completed'] = True
+        status['status'] = 'completed'
+        status['end_time'] = datetime.now()
+        
+        # Provide comprehensive feedback
+        if status['uploaded'] > 0:
+            flash(f"Batch upload completed: {status['uploaded']} file(s) uploaded successfully", "success")
+        if status['skipped'] > 0:
+            flash(f"Skipped {status['skipped']} file(s) (invalid type or name)", "warning")
+        if status['errors'] > 0:
+            flash(f"Failed to upload {status['errors']} file(s)", "error")
+            
+        logger.info(f"Batch upload {batch_id} completed: {status['uploaded']} uploaded, {status['skipped']} skipped, {status['errors']} errors")
+        
+        # Clean up status after a delay (in background)
+        threading.Timer(300, lambda: batch_upload_status.pop(batch_id, None)).start()
+        
+        return redirect(url_for('index'))
+        
+    except Exception as e:
+        logger.error(f"Error in synchronous batch processing: {e}")
+        if batch_id in batch_upload_status:
+            batch_upload_status[batch_id]['status'] = 'error'
+            batch_upload_status[batch_id]['completed'] = True
+        flash("An error occurred during batch upload", "error")
+        return redirect(url_for('index'))
+
+def process_batch_background(batch_id, files, batch_size):
+    """Process batch upload in background thread."""
+    try:
+        status = batch_upload_status[batch_id]
+        total_batches = status['total_batches']
+        
+        # Process files in batches
+        for batch_num in range(total_batches):
+            start_idx = batch_num * batch_size
+            end_idx = min(start_idx + batch_size, len(files))
+            batch_files = files[start_idx:end_idx]
+            
+            logger.info(f"Background processing batch {batch_num + 1}/{total_batches} ({len(batch_files)} files)")
+            
+            # Update status
+            status['current_batch'] = batch_num + 1
+            
+            # Process this batch
+            uploaded, skipped, errors = process_files_batch(batch_files)
+            status['uploaded'] += uploaded
+            status['skipped'] += skipped
+            status['errors'] += errors
+            
+            # Small delay to prevent overwhelming the system
+            time.sleep(0.1)
+        
+        # Mark as completed
+        status['completed'] = True
+        status['status'] = 'completed'
+        status['end_time'] = datetime.now()
+            
+        logger.info(f"Background batch upload {batch_id} completed: {status['uploaded']} uploaded, {status['skipped']} skipped, {status['errors']} errors")
+        
+        # Clean up status after 5 minutes
+        threading.Timer(300, lambda: batch_upload_status.pop(batch_id, None)).start()
+        
+    except Exception as e:
+        logger.error(f"Error in background batch processing: {e}")
+        if batch_id in batch_upload_status:
+            batch_upload_status[batch_id]['status'] = 'error'
+            batch_upload_status[batch_id]['completed'] = True
+
+def process_upload_batch(files):
+    """Process a batch of files (legacy method for backward compatibility)."""
+    uploaded, skipped, errors = process_files_batch(files)
+    
+    # Provide feedback to user
+    if uploaded > 0:
+        flash(f"Successfully uploaded {uploaded} file(s)", "success")
+    if skipped > 0:
+        flash(f"Skipped {skipped} file(s) (invalid type or name)", "warning")
+    if errors > 0:
+        flash(f"Failed to upload {errors} file(s)", "error")
+
+    return redirect(url_for('index'))
+
+def process_files_batch(files):
+    """Process a batch of files and return counts."""
+    uploaded_count = 0
+    skipped_count = 0
+    error_count = 0
+
+    for file in files:
+        if file and file.filename != '':
+            original_filename = file.filename
+            
+            if not allowed_file(original_filename):
+                logger.warning(f"File type not allowed: {original_filename}")
+                skipped_count += 1
+                continue
+            
+            # Secure the filename
+            filename = secure_filename(original_filename)
+            if not filename:
+                logger.warning(f"Invalid filename after sanitization: {original_filename}")
+                skipped_count += 1
+                continue
+            
+            try:
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                
+                # Check if file already exists and handle duplicates
+                if os.path.exists(file_path):
+                    name, ext = os.path.splitext(filename)
+                    counter = 1
+                    while os.path.exists(file_path):
+                        filename = f"{name}_{counter}{ext}"
+                        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                        counter += 1
+                
+                # Save the file
+                file.save(file_path)
+                logger.info(f"Saved file: {filename}")
+                
+                # Resize the image
+                resize_image(file_path)
+                uploaded_count += 1
+                
+            except Exception as e:
+                logger.error(f"Failed to upload {original_filename}: {e}")
+                error_count += 1
+                # Clean up partially uploaded file
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except:
+                        pass
+
+    return uploaded_count, skipped_count, error_count
 
 @app.route('/delete/<filename>', methods=['POST'])
 def delete_file(filename):
@@ -498,6 +656,7 @@ def settings():
             max_height = request.form.get('max_height', '').strip()
             max_width = request.form.get('max_width', '').strip()
             max_file_size = request.form.get('max_file_size_mb', '').strip()
+            batch_size = request.form.get('batch_size', '').strip()
 
             # Validate Upload Folder
             if new_folder:
@@ -557,11 +716,19 @@ def settings():
                     else:
                         error_messages.append("File size must be a positive integer.")
                         
-                if (max_height or max_width or max_file_size) and config_updated:
+                if batch_size:
+                    batch_val = int(batch_size)
+                    if batch_val > 0:
+                        current_config['upload']['batch_size'] = batch_val
+                        config_updated = True
+                    else:
+                        error_messages.append("Batch size must be a positive integer.")
+                        
+                if (max_height or max_width or max_file_size or batch_size) and config_updated:
                     success_messages.append("Size limits updated successfully")
                     
             except ValueError:
-                error_messages.append("Height, width, and file size must be valid integers.")
+                error_messages.append("Height, width, file size, and batch size must be valid integers.")
 
             # Save to config file if there were successful updates
             if config_updated and not error_messages:
@@ -589,6 +756,7 @@ def settings():
     max_height = app.config['MAX_HEIGHT']
     max_width = app.config['MAX_WIDTH']
     max_file_size_mb = app.config.get('MAX_CONTENT_LENGTH', 10485760) // (1024 * 1024)
+    batch_size = app.config['APP_CONFIG']['upload'].get('batch_size', 50)
     
     return render_template(
         'settings.html',
@@ -597,8 +765,41 @@ def settings():
         max_height=max_height,
         max_width=max_width,
         max_file_size_mb=max_file_size_mb,
+        batch_size=batch_size,
         error_messages=error_messages
     )
+
+@app.route('/batch-status/<batch_id>')
+def batch_status(batch_id):
+    """API endpoint to get batch upload status"""
+    if batch_id not in batch_upload_status:
+        return jsonify({'error': 'Batch not found'}), 404
+    
+    status = batch_upload_status[batch_id].copy()
+    
+    # Convert datetime objects to strings for JSON serialization
+    if 'start_time' in status:
+        status['start_time'] = status['start_time'].isoformat()
+    if 'end_time' in status:
+        status['end_time'] = status['end_time'].isoformat()
+    
+    # Calculate progress percentage
+    if status['total_batches'] > 0:
+        status['progress_percent'] = (status['current_batch'] / status['total_batches']) * 100
+    else:
+        status['progress_percent'] = 0
+    
+    return jsonify(status)
+
+@app.route('/batch-progress/<batch_id>')
+def batch_progress_page(batch_id):
+    """Page to show batch upload progress"""
+    if batch_id not in batch_upload_status:
+        flash("Batch upload not found or expired", "error")
+        return redirect(url_for('index'))
+    
+    status = batch_upload_status[batch_id]
+    return render_template('batch_progress.html', batch_id=batch_id, status=status)
 
 @app.route('/version')
 def version():

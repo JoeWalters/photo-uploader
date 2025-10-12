@@ -69,6 +69,17 @@
                 placeholder="Enter max file size in MB">
             <div class="form-text">Maximum file size for uploads in megabytes.</div>
         </div>
+        <div class="mb-3">
+            <label for="batch_size" class="form-label fw-bold">Batch Upload Size</label>
+            <input 
+                type="number" 
+                name="batch_size" 
+                id="batch_size" 
+                class="form-control" 
+                value="{{ batch_size }}" 
+                placeholder="Enter batch size">
+            <div class="form-text">Number of files to process in each batch. Uploads larger than this will be automatically split into batches.</div>
+        </div>
         <div class="text-center">
             <button type="submit" class="btn btn-primary btn-lg">Save Settings</button>
         </div>

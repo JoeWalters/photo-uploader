@@ -28,8 +28,34 @@ def demo_config():
         print(config_content)
     else:
         print("Config file not found. Run the application once to create it.")
+
+def demo_batch_info():
+    """Show information about batch upload feature"""
+    print("\n=== Batch Upload Feature ===")
+    print("The Photo Uploader now supports automatic batch processing for large uploads!")
+    print()
+    print("Key Features:")
+    print("• Uploads > 50 files (configurable) are automatically batched")
+    print("• Real-time progress tracking for large uploads")
+    print("• Background processing prevents timeouts")
+    print("• Individual file error handling")
+    print("• Configurable batch size in Settings")
+    print()
+    print("How it works:")
+    print("1. Select more than 50 photos for upload")
+    print("2. Application automatically detects large batch")
+    print("3. Files are processed in smaller groups")
+    print("4. Progress is tracked and displayed in real-time")
+    print("5. Background processing for very large uploads (>100 files)")
+    print()
+    print("Configuration:")
+    print("• Adjust batch size in the web UI Settings page")
+    print("• Default batch size: 50 files")
+    print("• Progress page automatically shown for large batches")
+    print()
         
     print(f"\n=== Config File Location ===")
+    config_file = "config/config.json"
     print(f"Configuration file: {os.path.abspath(config_file)}")
     print("Edit this file to change default settings!")
 
@@ -39,6 +65,7 @@ if __name__ == "__main__":
     
     demo_help()
     demo_config()
+    demo_batch_info()
     
     print("\n=== Example Usage ===")
     print("Start server with custom settings:")

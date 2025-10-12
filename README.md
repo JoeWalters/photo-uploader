@@ -15,6 +15,8 @@ This is a good option for uploading files to a photo-slideshow.
 ## Features
 
 - **Image Upload**: Supports multiple file uploads at once.
+- **Batch Upload Processing**: Automatically handles large uploads (>50 files) by splitting them into manageable batches to prevent timeouts and errors.
+- **Progress Tracking**: Real-time progress monitoring for large batch uploads with detailed status information.
 - **Sorting Options**: Sort images by:
   - Name (A-Z)
   - Name (Z-A)
@@ -56,6 +58,7 @@ This is a good option for uploading files to a photo-slideshow.
     | `ALLOWED_EXTENSIONS` | * Which extensions to allow |
     | `MAX_HEIGHT` | * Max height of uploaded images. Taller images will be shrunk to fit. |
     | `MAX_WIDTH` | * Max width of uploaded images. Wider images will be shrunk to fit. |
+    | `batch_size` | * Number of files to process per batch (default: 50). Uploads larger than this will be automatically batched. |
 4. **Run the Application**:
    ```bash
    python3 photo_uploader.py
@@ -114,7 +117,8 @@ Settings are stored in `config/config.json` and persist between runs. You can ed
     "upload": {
         "folder": "~/photo_uploads",
         "max_file_size_mb": 10,
-        "allowed_extensions": ["png", "jpg", "jpeg", "gif", "webp"]
+        "allowed_extensions": ["png", "jpg", "jpeg", "gif", "webp"],
+        "batch_size": 50
     },
     "image_processing": {
         "max_width": 1920,
@@ -128,6 +132,30 @@ Settings are stored in `config/config.json` and persist between runs. You can ed
 
 See `config/README.md` for detailed configuration options.
 
+## Batch Upload Feature
+
+When uploading more than 50 photos (configurable), the application automatically switches to batch processing mode to ensure reliable uploads:
+
+### How It Works
+- **Automatic Detection**: When you select more than 50 files, the UI will indicate batch processing will be used
+- **Smart Batching**: Files are processed in smaller groups (default: 50 files per batch)
+- **Progress Tracking**: For very large uploads, you'll see a real-time progress page showing:
+  - Current batch being processed
+  - Number of files uploaded, skipped, and any errors
+  - Overall progress percentage
+- **Background Processing**: Extremely large uploads run in the background, allowing you to monitor progress without blocking the interface
+
+### Configuration
+- **Batch Size**: Adjustable in Settings (default: 50 files per batch)
+- **Threshold**: Any upload larger than the batch size triggers automatic batching
+- **Progress Display**: Uploads over 100 files automatically show the progress page
+
+### Benefits
+- **Prevents Timeouts**: Large uploads won't fail due to HTTP request timeouts
+- **Better Error Handling**: Individual file failures don't stop the entire upload
+- **Resource Management**: Prevents memory issues when processing hundreds of photos
+- **User Feedback**: Clear progress indication for long-running uploads
+
 ## How to Use
 1.	**Settings**:
     Press the Settings button in the top right of the page
@@ -137,6 +165,7 @@ See `config/README.md` for detailed configuration options.
     | `Allowed Extensions` | Which extensions to allow |
     | `Max Image Height` | Max height of uploaded images. Taller images will be shrunk to fit. |
     | `Max Image Width` | Max width of uploaded images. Wider images will be shrunk to fit. |
+    | `Batch Upload Size` | Number of files to process per batch for large uploads |
 2.	**Upload Images**
 	* Select images using the “Choose File” button.
 	* Click “Upload” to add the images to the gallery.

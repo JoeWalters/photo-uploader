@@ -25,10 +25,13 @@
     <form id="uploadForm" action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data" class="mb-4">
         <div class="input-group">
             <input type="file" name="files" multiple class="form-control" id="fileInput">
-            <button type="submit" class="btn btn-primary">Upload</button>
+            <button type="submit" class="btn btn-primary" id="uploadBtn">Upload</button>
         </div>
         <div id="uploadAlert" class="mt-2 d-none alert alert-danger" role="alert">
             Please select at least one file to upload.
+        </div>
+        <div id="batchInfo" class="mt-2 d-none alert alert-info" role="alert">
+            <strong>Large batch detected!</strong> Files will be automatically processed in batches to ensure reliable upload.
         </div>
     </form>
 
@@ -63,16 +66,38 @@
 </div>
 
 <script>
+    // File input change handler
+    document.getElementById("fileInput").addEventListener("change", function () {
+        const fileInput = this;
+        const batchInfo = document.getElementById("batchInfo");
+        const uploadBtn = document.getElementById("uploadBtn");
+        
+        if (fileInput.files.length > 50) {
+            batchInfo.classList.remove("d-none");
+            uploadBtn.textContent = "Upload Batch";
+        } else {
+            batchInfo.classList.add("d-none");
+            uploadBtn.textContent = "Upload";
+        }
+    });
+
     // Prevent form submission if no files are selected
     document.getElementById("uploadForm").addEventListener("submit", function (event) {
         const fileInput = document.getElementById("fileInput");
         const alertBox = document.getElementById("uploadAlert");
+        const uploadBtn = document.getElementById("uploadBtn");
 
         if (!fileInput.files.length) {
             event.preventDefault(); // Stop form submission
             alertBox.classList.remove("d-none"); // Show alert box
         } else {
             alertBox.classList.add("d-none"); // Hide alert box
+            
+            // Show loading state for large batches
+            if (fileInput.files.length > 50) {
+                uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+                uploadBtn.disabled = true;
+            }
         }
     });
 </script>
