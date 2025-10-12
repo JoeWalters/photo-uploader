@@ -65,11 +65,13 @@
     </form>
 
     <!-- Image Grid -->
-    <div class="row">
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4">
         {% for image in images %}
-        <div class="col-md-3 mb-4">
-            <div class="card shadow-sm">
-                <img src="{{ url_for('uploaded_file', filename=image['name']) }}" class="card-img-top" alt="{{ image['name'] }}">
+        <div class="col mb-4">
+            <div class="card shadow-sm photo-card">
+                <div class="card-img-container">
+                    <img src="{{ url_for('uploaded_file', filename=image['name']) }}" class="card-img-top" alt="{{ image['name'] }}">
+                </div>
                 <div class="card-body text-center">
                     <h5 class="card-title text-truncate">{{ image['name'] }}</h5>
                     <p class="card-text text-muted small">
