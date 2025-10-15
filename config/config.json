@@ -9,9 +9,10 @@
     },
     
     "upload": {
-        "folder": "~/photo_uploads",
+        "folder": "./uploads",
         "max_file_size_mb": 100,
-        "allowed_extensions": ["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff"]
+        "allowed_extensions": ["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff"],
+        "duplicate_handling": "timestamp"
     },
     
     "image_processing": {

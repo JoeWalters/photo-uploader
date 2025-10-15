@@ -36,6 +36,20 @@ def ensure_pillow_installed():
 
 ensure_pillow_installed()
 
+def get_actual_upload_folder(config_folder_path):
+    """Determine the actual upload folder path, considering Docker environment."""
+    # If we're in Docker (detected by /app/uploads existing), always use that
+    if os.path.exists('/app/uploads') and os.path.isdir('/app/uploads'):
+        return '/app/uploads'
+    
+    # For development, resolve relative paths relative to the script location
+    if config_folder_path.startswith('./'):
+        script_dir = Path(__file__).parent
+        return str(script_dir / config_folder_path[2:])
+    
+    # Otherwise, expand user paths like ~/photo_uploads
+    return os.path.expanduser(config_folder_path)
+
 def get_app_version():
     """Get application version from version.txt file (created during Docker build)"""
     version_file = Path(__file__).parent / 'version.txt'
@@ -68,10 +82,11 @@ def load_config():
             "debug": False
         },
         "upload": {
-            "folder": "~/photo_uploads",
+            "folder": "./uploads",
             "max_file_size_mb": 100,
             "allowed_extensions": ["png", "jpg", "jpeg", "gif", "webp"],
-            "batch_size": 50
+            "batch_size": 50,
+            "duplicate_handling": "timestamp"
         },
         "image_processing": {
             "max_width": 1920,
@@ -183,14 +198,8 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
 
 # Configure Flask app from config
-upload_folder = config['upload']['folder']
-
-# In Docker, always use /app/uploads if the config points to ~/photo_uploads
-if upload_folder == "~/photo_uploads" and os.path.exists('/app/uploads'):
-    upload_folder = '/app/uploads'
-    logger.info("Using Docker default upload folder: /app/uploads")
-else:
-    upload_folder = os.path.expanduser(upload_folder)
+upload_folder = get_actual_upload_folder(config['upload']['folder'])
+logger.info(f"Upload folder determined: {upload_folder}")
 
 app.config['UPLOAD_FOLDER'] = upload_folder
 app.config['MAX_HEIGHT'] = config['image_processing']['max_height']
@@ -200,6 +209,7 @@ app.config['ALLOWED_EXTENSIONS'] = set(config['upload']['allowed_extensions'])
 app.config['AUTO_ROTATE'] = config['image_processing']['auto_rotate']
 app.config['OPTIMIZE'] = config['image_processing']['optimize']
 app.config['QUALITY'] = config['image_processing']['quality']
+app.config['DUPLICATE_HANDLING'] = config['upload'].get('duplicate_handling', 'timestamp')
 
 # Store config globally for settings updates
 app.config['APP_CONFIG'] = config
@@ -241,11 +251,9 @@ except Exception as e:
     sys.exit(1)
 
 def allowed_file(filename):
-    """Check if a file is an allowed image type."""
-    if not filename or '.' not in filename:
-        return False
-    extension = filename.rsplit('.', 1)[1].lower()
-    return extension in app.config['ALLOWED_EXTENSIONS']
+    """Check if the file extension is allowed."""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 def resize_image(image_path):
     """Resize an image to fit within the configured maximum dimensions."""
@@ -585,20 +593,55 @@ def process_files_batch(files):
                 continue
             
             try:
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                # Generate unique filename to ensure no overwrites
+                base_name, ext = os.path.splitext(filename)
+                unique_filename = filename
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
                 
-                # Check if file already exists and handle duplicates
+                # Check if file exists and handle duplicates based on config
                 if os.path.exists(file_path):
-                    name, ext = os.path.splitext(filename)
-                    counter = 1
-                    while os.path.exists(file_path):
-                        filename = f"{name}_{counter}{ext}"
-                        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                        counter += 1
+                    duplicate_handling = app.config.get('DUPLICATE_HANDLING', 'timestamp')
+                    
+                    if duplicate_handling == 'timestamp':
+                        # Create unique filename with timestamp
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # Include milliseconds
+                        unique_filename = f"{base_name}_{timestamp}{ext}"
+                        file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+                        
+                        # If timestamp version still exists, add counter (very unlikely)
+                        counter = 1
+                        while os.path.exists(file_path) and counter <= 100:
+                            unique_filename = f"{base_name}_{timestamp}_{counter}{ext}"
+                            file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+                            counter += 1
+                        
+                        if counter > 100:
+                            logger.error(f"Unable to create unique filename for {original_filename}")
+                            error_count += 1
+                            continue  # Skip this file
+                            
+                    elif duplicate_handling == 'counter':
+                        # Use simple counter approach
+                        counter = 1
+                        while os.path.exists(file_path) and counter <= 1000:
+                            unique_filename = f"{base_name}_{counter}{ext}"
+                            file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+                            counter += 1
+                        
+                        if counter > 1000:
+                            logger.error(f"Too many duplicate files for {original_filename}")
+                            error_count += 1
+                            continue  # Skip this file
+                    
+                    else:  # 'overwrite' or unknown
+                        logger.warning(f"File {filename} already exists and will be overwritten")
+                    
+                    if unique_filename != filename:
+                        logger.info(f"Preventing overwrite: {filename} -> {unique_filename}")
                 
                 # Save the file
                 file.save(file_path)
-                logger.info(f"Saved file: {filename}")
+                logger.info(f"Successfully saved: {unique_filename}")
                 
                 # Resize the image
                 resize_image(file_path)
@@ -684,14 +727,19 @@ def settings():
 
             # Validate Upload Folder
             if new_folder:
-                expanded_folder = os.path.expanduser(new_folder)
                 try:
-                    os.makedirs(expanded_folder, exist_ok=True)
-                    if os.access(expanded_folder, os.W_OK):
-                        app.config['UPLOAD_FOLDER'] = expanded_folder
-                        current_config['upload']['folder'] = new_folder  # Store original path
+                    # Use consistent folder resolution
+                    actual_folder = get_actual_upload_folder(new_folder)
+                    os.makedirs(actual_folder, exist_ok=True)
+                    if os.access(actual_folder, os.W_OK):
+                        app.config['UPLOAD_FOLDER'] = actual_folder
+                        current_config['upload']['folder'] = new_folder  # Store original config path
                         config_updated = True
-                        success_messages.append("Upload folder updated successfully")
+                        if actual_folder != os.path.expanduser(new_folder):
+                            success_messages.append(f"Upload folder updated (Docker mode: {actual_folder})")
+                        else:
+                            success_messages.append("Upload folder updated successfully")
+                        logger.info(f"Upload folder changed to: {actual_folder}")
                     else:
                         error_messages.append("Upload folder is not writable")
                 except Exception as e:
