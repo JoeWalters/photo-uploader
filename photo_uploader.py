@@ -69,7 +69,7 @@ def load_config():
         },
         "upload": {
             "folder": "~/photo_uploads",
-            "max_file_size_mb": 10,
+            "max_file_size_mb": 100,
             "allowed_extensions": ["png", "jpg", "jpeg", "gif", "webp"],
             "batch_size": 50
         },
