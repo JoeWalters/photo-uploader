@@ -256,46 +256,93 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 def resize_image(image_path):
-    """Resize an image to fit within the configured maximum dimensions."""
+    """Fit an image within the configured maximum dimensions without degrading it.
+
+    - Nothing to do (already fits, no rotation needed): the bytes the user sent are
+      kept, metadata included — no silent re-encode.
+    - Animated images are rebuilt frame by frame (Pillow writes only the current
+      frame unless save_all is passed, which is how GIFs used to lose animation).
+    - `quality` is applied to lossy formats only, never to PNG.
+    - The new bytes are written beside the target and swapped in with os.replace(),
+      so a failed save can never leave a half-written photo behind.
+    """
+    tmp_path = image_path + '.tmp'
     try:
         with Image.open(image_path) as img:
+            image_format = img.format
+            if not image_format:
+                raise ValueError(f"Unrecognised image format for {os.path.basename(image_path)}")
+
             # Correct the orientation based on EXIF data if enabled
+            orientation = 1
             if app.config['AUTO_ROTATE']:
                 try:
-                    # Get EXIF data
                     exif = img.getexif()
                     if exif is not None:
-                        # Look for orientation tag (274 is the standard EXIF orientation tag)
-                        orientation = exif.get(274, 1)  # Default to 1 (normal) if not found
-                        if orientation == 3:
-                            img = img.rotate(180, expand=True)
-                        elif orientation == 6:
-                            img = img.rotate(270, expand=True)
-                        elif orientation == 8:
-                            img = img.rotate(90, expand=True)
+                        # 274 is the standard EXIF orientation tag
+                        orientation = exif.get(274, 1)
                 except (AttributeError, KeyError, IndexError) as e:
                     logger.debug(f"EXIF orientation correction failed for {image_path}: {e}")
-                    pass  # EXIF data might be missing or unreadable
 
-            # Resize the image if needed
+            needs_rotate = orientation in (3, 6, 8)
+            max_size = (app.config['MAX_WIDTH'], app.config['MAX_HEIGHT'])
+            needs_resize = img.width > max_size[0] or img.height > max_size[1]
+
+            if not needs_rotate and not needs_resize:
+                # Already within the limits: leave the user's file untouched.
+                return
+
+            if needs_rotate:
+                if orientation == 3:
+                    img = img.rotate(180, expand=True)
+                elif orientation == 6:
+                    img = img.rotate(270, expand=True)
+                elif orientation == 8:
+                    img = img.rotate(90, expand=True)
+
             original_size = img.size
-            img.thumbnail((app.config['MAX_WIDTH'], app.config['MAX_HEIGHT']), Image.Resampling.LANCZOS)
-            
-            # Save the image with configured settings
+            is_animated = getattr(img, 'is_animated', False) and getattr(img, 'n_frames', 1) > 1
+
             save_kwargs = {}
-            if img.format == 'JPEG' or image_path.lower().endswith(('.jpg', '.jpeg')):
+            if image_format in ('JPEG', 'WEBP'):
                 save_kwargs['quality'] = app.config['QUALITY']
             if app.config['OPTIMIZE']:
                 save_kwargs['optimize'] = True
-                
-            img.save(image_path, **save_kwargs)
-            
-            new_size = img.size
+
+            if is_animated:
+                # Rebuild the frame list, resizing each frame, then save them all.
+                frames = []
+                for frame_index in range(img.n_frames):
+                    img.seek(frame_index)
+                    frame = img.copy()
+                    frame.thumbnail(max_size, Image.Resampling.LANCZOS)
+                    frames.append(frame)
+                save_kwargs.update({
+                    'save_all': True,
+                    'append_images': frames[1:],
+                    'duration': img.info.get('duration', 100),
+                    'loop': img.info.get('loop', 0),
+                })
+                target = frames[0]
+            else:
+                img.thumbnail(max_size, Image.Resampling.LANCZOS)
+                target = img
+
+            # Write beside the target, then swap: never a partially written photo.
+            target.save(tmp_path, format=image_format, **save_kwargs)
+            os.replace(tmp_path, image_path)
+
+            new_size = target.size
             if original_size != new_size:
                 logger.info(f"Resized image {os.path.basename(image_path)} from {original_size} to {new_size}")
-                
+
     except Exception as e:
         logger.error(f"Failed to resize image {image_path}: {e}")
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            logger.warning(f"Could not remove temporary file {tmp_path}")
         raise
 
 def get_image_metadata(file_path):
