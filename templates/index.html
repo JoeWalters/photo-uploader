@@ -313,54 +313,64 @@ async function uploadBatch(files) {
         throw new Error(`HTTP error! status: ${response.status}`);
     }
     
-    // Parse response to extract upload results
-    const text = await response.text();
-    
-    // Simple parsing of flash messages to get counts
-    const uploadedMatch = text.match(/Successfully uploaded (\d+) file/);
-    const skippedMatch = text.match(/Skipped (\d+) file/);
-    const errorMatch = text.match(/Failed to upload (\d+) file/);
-    
+    // /upload always answers with JSON: the real per-batch counts, not flash text.
+    const result = await response.json();
     return {
-        uploaded: uploadedMatch ? parseInt(uploadedMatch[1]) : files.length,
-        skipped: skippedMatch ? parseInt(skippedMatch[1]) : 0,
-        errors: errorMatch ? parseInt(errorMatch[1]) : 0
+        uploaded: Number(result.uploaded) || 0,
+        skipped: Number(result.skipped) || 0,
+        errors: Number(result.errors) || 0
     };
 }
 
 async function uploadSingleBatch(files) {
     const uploadBtn = document.getElementById("uploadBtn");
     const originalText = uploadBtn.textContent;
-    
+
     uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading...';
     uploadBtn.disabled = true;
-    
+
+    let resultMessage = null;
     try {
         const formData = new FormData();
         files.forEach(file => {
             formData.append('files', file);
         });
-        
+
         const response = await fetch('/upload', {
             method: 'POST',
             body: formData
         });
-        
-        if (response.ok) {
-            // Show brief success message then refresh
-            uploadBtn.innerHTML = '<span class="text-success">✓ Upload Complete!</span>';
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
-        } else {
+
+        if (!response.ok) {
             throw new Error(`Upload failed: ${response.status}`);
+        }
+
+        // Report what the server actually did — a rejected file is not a success.
+        const result = await response.json();
+        const uploaded = Number(result.uploaded) || 0;
+        const skipped = Number(result.skipped) || 0;
+        const failed = Number(result.errors) || 0;
+
+        if (uploaded > 0 && skipped === 0 && failed === 0) {
+            resultMessage = `<span class="text-success">✓ ${uploaded} uploaded</span>`;
+            // Refresh so the new photo appears in the gallery.
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            // Nothing (or not everything) went in: keep the counts on screen and
+            // let the user fix the selection instead of reloading over them.
+            resultMessage = `<span class="text-warning">${uploaded} uploaded, ${skipped} skipped, ${failed} failed</span>`;
+            uploadBtn.disabled = false; // let the user retry without a reload
         }
     } catch (error) {
         console.error('Upload error:', error);
         alert('Upload failed. Please try again.');
     } finally {
-        uploadBtn.textContent = originalText;
-        uploadBtn.disabled = false;
+        if (resultMessage) {
+            uploadBtn.innerHTML = resultMessage;
+        } else {
+            uploadBtn.textContent = originalText;
+            uploadBtn.disabled = false;
+        }
     }
 }
 
