@@ -392,34 +392,19 @@ def upload_file():
 
         # Process the files (now always a manageable batch size from client)
         uploaded, skipped, errors = process_files_batch(files)
-        
-        # For AJAX requests, return JSON response
-        if request.headers.get('Content-Type', '').startswith('multipart/form-data') and not request.form.get('redirect'):
-            return jsonify({
-                "uploaded": uploaded,
-                "skipped": skipped, 
-                "errors": errors,
-                "total": len(files)
-            })
-        
-        # For regular form submissions, use flash messages and redirect
-        if uploaded > 0:
-            flash(f"Successfully uploaded {uploaded} file(s)", "success")
-        if skipped > 0:
-            flash(f"Skipped {skipped} file(s) (invalid type or name)", "warning")
-        if errors > 0:
-            flash(f"Failed to upload {errors} file(s)", "error")
 
-        return redirect(url_for('index'))
-        
+        # One response shape: the client renders these counts, so a rejected file
+        # has to be distinguishable from an accepted one.
+        return jsonify({
+            "uploaded": uploaded,
+            "skipped": skipped,
+            "errors": errors,
+            "total": len(files)
+        })
+
     except Exception as e:
         logger.error(f"Unexpected error in upload: {e}")
-        # For AJAX requests, return JSON error
-        if request.headers.get('Content-Type', '').startswith('multipart/form-data') and not request.form.get('redirect'):
-            return jsonify({"error": "Upload failed"}), 500
-        # For regular requests, use flash message
-        flash("An unexpected error occurred during upload", "error")
-        return redirect(url_for('index'))
+        return jsonify({"error": "Upload failed"}), 500
 
 def handle_batch_upload(files, batch_size=50):
     """Handle batch upload for large number of files."""
