@@ -872,8 +872,6 @@ def settings():
                         merged_config.setdefault(section, {}).update(values)
 
                     def _apply():
-                        if 'UPLOAD_FOLDER' in pending_app:
-                            os.makedirs(pending_app['UPLOAD_FOLDER'], exist_ok=True)
                         app.config.update(pending_app)
                         current_config.clear()
                         current_config.update(merged_config)
@@ -881,10 +879,23 @@ def settings():
                             success_messages.append(folder_message)
                             logger.info(f"Upload folder changed to: {pending_app['UPLOAD_FOLDER']}")
 
-                    if save_config_to_file(merged_config):
+                    # Create the folder before the write, not after: a creation
+                    # failure then leaves config.json untouched (an empty new
+                    # directory is harmless), instead of a persisted setting the
+                    # running app never applied.
+                    folder_ready = True
+                    if 'UPLOAD_FOLDER' in pending_app:
+                        try:
+                            os.makedirs(pending_app['UPLOAD_FOLDER'], exist_ok=True)
+                        except OSError as e:
+                            folder_ready = False
+                            success_messages = []
+                            error_messages.append(f"Error with upload folder: {str(e)}")
+
+                    if folder_ready and save_config_to_file(merged_config):
                         _apply()
                         success_messages.append("Settings saved to config/config.json")
-                    else:
+                    elif folder_ready:
                         success_messages = []
                         error_messages.append("Failed to save settings to configuration file")
 
