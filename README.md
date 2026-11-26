@@ -132,6 +132,19 @@ Settings are stored in `config/config.json` and persist between runs. You can ed
 
 See `config/README.md` for detailed configuration options.
 
+### What an upload does to your file
+
+- **Fits within `max_width` × `max_height`.** Larger images are scaled down (aspect ratio preserved); smaller
+  ones are not enlarged.
+- **Nothing to do means nothing is touched.** If the image already fits and needs no EXIF rotation, the bytes
+  you uploaded are stored as-is — no re-encode, no quality loss, metadata intact.
+- **Animated GIFs stay animated.** Frames are rebuilt rather than flattened to the first one.
+- **`quality` applies to JPEG and WebP only**, so lossless PNG/WebP input is not silently degraded.
+- **Re-encoding discards metadata** (EXIF dates, GPS, ICC profile) for images that are resized or rotated, because
+  Pillow writes a new file. Your original is not kept.
+- **Writes are atomic**: a new file is written beside the target and swapped in, so a failed upload never leaves a
+  partial photo in the gallery.
+
 ## Batch Upload Feature
 
 When uploading more than 50 photos (configurable), the application automatically switches to batch processing mode to ensure reliable uploads:

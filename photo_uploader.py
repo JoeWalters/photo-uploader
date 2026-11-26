@@ -126,8 +126,12 @@ def load_config():
             return default_config
             
     except (json.JSONDecodeError, IOError, PermissionError) as e:
-        logger.error(f"Error loading config file: {e}")
-        logger.info("Using default configuration")
+        # Say exactly which file is unusable and what is being used instead: a
+        # silent fall back to defaults loses the user's folder, port and limits.
+        logger.error(
+            f"CONFIG FILE UNUSABLE: {config_file} could not be read ({e.__class__.__name__}: {e}). "
+            "Falling back to DEFAULT settings for this run — fix or delete that file to silence this."
+        )
         return default_config
 
 def parse_command_line_args(config):
@@ -180,14 +184,28 @@ def parse_command_line_args(config):
     return config
 
 def save_config_to_file(config):
-    """Save configuration back to config file"""
+    """Save configuration back to config file, atomically.
+
+    Writing in place truncates first, so a crash or a full disk leaves an
+    unparseable config that load_config() silently replaces with defaults. Write
+    a sibling temp file, fsync it, then swap it in.
+    """
     config_file = Path(__file__).parent / 'config' / 'config.json'
+    tmp_file = config_file.with_name(config_file.name + '.tmp')
     try:
-        with open(config_file, 'w') as f:
+        with open(tmp_file, 'w') as f:
             json.dump(config, f, indent=4)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_file, config_file)
         return True
-    except IOError as e:
+    except (IOError, OSError) as e:
         logger.error(f"Failed to save config: {e}")
+        try:
+            if tmp_file.exists():
+                tmp_file.unlink()
+        except OSError:
+            logger.warning(f"Could not remove temporary config file {tmp_file}")
         return False
 
 # Load and parse configuration
@@ -256,46 +274,93 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 def resize_image(image_path):
-    """Resize an image to fit within the configured maximum dimensions."""
+    """Fit an image within the configured maximum dimensions without degrading it.
+
+    - Nothing to do (already fits, no rotation needed): the bytes the user sent are
+      kept, metadata included — no silent re-encode.
+    - Animated images are rebuilt frame by frame (Pillow writes only the current
+      frame unless save_all is passed, which is how GIFs used to lose animation).
+    - `quality` is applied to lossy formats only, never to PNG.
+    - The new bytes are written beside the target and swapped in with os.replace(),
+      so a failed save can never leave a half-written photo behind.
+    """
+    tmp_path = image_path + '.tmp'
     try:
         with Image.open(image_path) as img:
+            image_format = img.format
+            if not image_format:
+                raise ValueError(f"Unrecognised image format for {os.path.basename(image_path)}")
+
             # Correct the orientation based on EXIF data if enabled
+            orientation = 1
             if app.config['AUTO_ROTATE']:
                 try:
-                    # Get EXIF data
                     exif = img.getexif()
                     if exif is not None:
-                        # Look for orientation tag (274 is the standard EXIF orientation tag)
-                        orientation = exif.get(274, 1)  # Default to 1 (normal) if not found
-                        if orientation == 3:
-                            img = img.rotate(180, expand=True)
-                        elif orientation == 6:
-                            img = img.rotate(270, expand=True)
-                        elif orientation == 8:
-                            img = img.rotate(90, expand=True)
+                        # 274 is the standard EXIF orientation tag
+                        orientation = exif.get(274, 1)
                 except (AttributeError, KeyError, IndexError) as e:
                     logger.debug(f"EXIF orientation correction failed for {image_path}: {e}")
-                    pass  # EXIF data might be missing or unreadable
 
-            # Resize the image if needed
+            needs_rotate = orientation in (3, 6, 8)
+            max_size = (app.config['MAX_WIDTH'], app.config['MAX_HEIGHT'])
+            needs_resize = img.width > max_size[0] or img.height > max_size[1]
+
+            if not needs_rotate and not needs_resize:
+                # Already within the limits: leave the user's file untouched.
+                return
+
+            if needs_rotate:
+                if orientation == 3:
+                    img = img.rotate(180, expand=True)
+                elif orientation == 6:
+                    img = img.rotate(270, expand=True)
+                elif orientation == 8:
+                    img = img.rotate(90, expand=True)
+
             original_size = img.size
-            img.thumbnail((app.config['MAX_WIDTH'], app.config['MAX_HEIGHT']), Image.Resampling.LANCZOS)
-            
-            # Save the image with configured settings
+            is_animated = getattr(img, 'is_animated', False) and getattr(img, 'n_frames', 1) > 1
+
             save_kwargs = {}
-            if img.format == 'JPEG' or image_path.lower().endswith(('.jpg', '.jpeg')):
+            if image_format in ('JPEG', 'WEBP'):
                 save_kwargs['quality'] = app.config['QUALITY']
             if app.config['OPTIMIZE']:
                 save_kwargs['optimize'] = True
-                
-            img.save(image_path, **save_kwargs)
-            
-            new_size = img.size
+
+            if is_animated:
+                # Rebuild the frame list, resizing each frame, then save them all.
+                frames = []
+                for frame_index in range(img.n_frames):
+                    img.seek(frame_index)
+                    frame = img.copy()
+                    frame.thumbnail(max_size, Image.Resampling.LANCZOS)
+                    frames.append(frame)
+                save_kwargs.update({
+                    'save_all': True,
+                    'append_images': frames[1:],
+                    'duration': img.info.get('duration', 100),
+                    'loop': img.info.get('loop', 0),
+                })
+                target = frames[0]
+            else:
+                img.thumbnail(max_size, Image.Resampling.LANCZOS)
+                target = img
+
+            # Write beside the target, then swap: never a partially written photo.
+            target.save(tmp_path, format=image_format, **save_kwargs)
+            os.replace(tmp_path, image_path)
+
+            new_size = target.size
             if original_size != new_size:
                 logger.info(f"Resized image {os.path.basename(image_path)} from {original_size} to {new_size}")
-                
+
     except Exception as e:
         logger.error(f"Failed to resize image {image_path}: {e}")
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            logger.warning(f"Could not remove temporary file {tmp_path}")
         raise
 
 def get_image_metadata(file_path):
@@ -392,34 +457,19 @@ def upload_file():
 
         # Process the files (now always a manageable batch size from client)
         uploaded, skipped, errors = process_files_batch(files)
-        
-        # For AJAX requests, return JSON response
-        if request.headers.get('Content-Type', '').startswith('multipart/form-data') and not request.form.get('redirect'):
-            return jsonify({
-                "uploaded": uploaded,
-                "skipped": skipped, 
-                "errors": errors,
-                "total": len(files)
-            })
-        
-        # For regular form submissions, use flash messages and redirect
-        if uploaded > 0:
-            flash(f"Successfully uploaded {uploaded} file(s)", "success")
-        if skipped > 0:
-            flash(f"Skipped {skipped} file(s) (invalid type or name)", "warning")
-        if errors > 0:
-            flash(f"Failed to upload {errors} file(s)", "error")
 
-        return redirect(url_for('index'))
-        
+        # One response shape: the client renders these counts, so a rejected file
+        # has to be distinguishable from an accepted one.
+        return jsonify({
+            "uploaded": uploaded,
+            "skipped": skipped,
+            "errors": errors,
+            "total": len(files)
+        })
+
     except Exception as e:
         logger.error(f"Unexpected error in upload: {e}")
-        # For AJAX requests, return JSON error
-        if request.headers.get('Content-Type', '').startswith('multipart/form-data') and not request.form.get('redirect'):
-            return jsonify({"error": "Upload failed"}), 500
-        # For regular requests, use flash message
-        flash("An unexpected error occurred during upload", "error")
-        return redirect(url_for('index'))
+        return jsonify({"error": "Upload failed"}), 500
 
 def handle_batch_upload(files, batch_size=50):
     """Handle batch upload for large number of files."""
@@ -716,8 +766,15 @@ def settings():
     if request.method == 'POST':
         try:
             current_config = app.config['APP_CONFIG']
-            config_updated = False
-            
+
+            # Validate everything first and change nothing. Nothing in this block
+            # touches app.config or current_config: a form with one bad field must
+            # leave the running app exactly as it was.
+            pending_config = {}      # nested config.json updates
+            pending_app = {}         # app.config updates, applied only after the write
+            folder_message = None
+            size_limit_changed = False
+
             new_folder = request.form.get('upload_folder', '').strip()
             new_extensions = request.form.get('allowed_extensions', '').strip()
             max_height = request.form.get('max_height', '').strip()
@@ -728,20 +785,22 @@ def settings():
             # Validate Upload Folder
             if new_folder:
                 try:
-                    # Use consistent folder resolution
                     actual_folder = get_actual_upload_folder(new_folder)
-                    os.makedirs(actual_folder, exist_ok=True)
-                    if os.access(actual_folder, os.W_OK):
-                        app.config['UPLOAD_FOLDER'] = actual_folder
-                        current_config['upload']['folder'] = new_folder  # Store original config path
-                        config_updated = True
-                        if actual_folder != os.path.expanduser(new_folder):
-                            success_messages.append(f"Upload folder updated (Docker mode: {actual_folder})")
-                        else:
-                            success_messages.append("Upload folder updated successfully")
-                        logger.info(f"Upload folder changed to: {actual_folder}")
-                    else:
+                    # Check writability without creating anything yet.
+                    probe = actual_folder
+                    while not os.path.isdir(probe) and os.path.dirname(probe) != probe:
+                        probe = os.path.dirname(probe)
+                    if os.path.isdir(actual_folder) and not os.access(actual_folder, os.W_OK):
                         error_messages.append("Upload folder is not writable")
+                    elif not os.access(probe, os.W_OK):
+                        error_messages.append("Upload folder is not writable")
+                    else:
+                        pending_app['UPLOAD_FOLDER'] = actual_folder
+                        pending_config.setdefault('upload', {})['folder'] = new_folder
+                        if actual_folder != os.path.expanduser(new_folder):
+                            folder_message = f"Upload folder updated (Docker mode: {actual_folder})"
+                        else:
+                            folder_message = "Upload folder updated successfully"
                 except Exception as e:
                     error_messages.append(f"Error with upload folder: {str(e)}")
 
@@ -751,10 +810,9 @@ def settings():
                     new_extensions_list = [ext.strip().lower() for ext in new_extensions.split(',') if ext.strip()]
                     if not new_extensions_list:
                         raise ValueError("No valid extensions provided.")
-                    
-                    app.config['ALLOWED_EXTENSIONS'] = set(new_extensions_list)
-                    current_config['upload']['allowed_extensions'] = new_extensions_list
-                    config_updated = True
+
+                    pending_app['ALLOWED_EXTENSIONS'] = set(new_extensions_list)
+                    pending_config.setdefault('upload', {})['allowed_extensions'] = new_extensions_list
                     success_messages.append("Allowed extensions updated successfully")
                 except Exception as e:
                     error_messages.append(f"Error with allowed extensions: {str(e)}")
@@ -764,50 +822,82 @@ def settings():
                 if max_height:
                     height_val = int(max_height)
                     if height_val > 0:
-                        app.config['MAX_HEIGHT'] = height_val
-                        current_config['image_processing']['max_height'] = height_val
-                        config_updated = True
+                        pending_app['MAX_HEIGHT'] = height_val
+                        pending_config.setdefault('image_processing', {})['max_height'] = height_val
+                        size_limit_changed = True
                     else:
                         error_messages.append("Height must be a positive integer.")
-                        
+
                 if max_width:
                     width_val = int(max_width)
                     if width_val > 0:
-                        app.config['MAX_WIDTH'] = width_val
-                        current_config['image_processing']['max_width'] = width_val
-                        config_updated = True
+                        pending_app['MAX_WIDTH'] = width_val
+                        pending_config.setdefault('image_processing', {})['max_width'] = width_val
+                        size_limit_changed = True
                     else:
                         error_messages.append("Width must be a positive integer.")
-                        
+
                 if max_file_size:
                     size_val = int(max_file_size)
                     if size_val > 0:
-                        app.config['MAX_CONTENT_LENGTH'] = size_val * 1024 * 1024
-                        current_config['upload']['max_file_size_mb'] = size_val
-                        config_updated = True
+                        pending_app['MAX_CONTENT_LENGTH'] = size_val * 1024 * 1024
+                        pending_config.setdefault('upload', {})['max_file_size_mb'] = size_val
+                        size_limit_changed = True
                     else:
                         error_messages.append("File size must be a positive integer.")
-                        
+
                 if batch_size:
                     batch_val = int(batch_size)
                     if batch_val > 0:
-                        current_config['upload']['batch_size'] = batch_val
-                        config_updated = True
+                        pending_config.setdefault('upload', {})['batch_size'] = batch_val
+                        size_limit_changed = True
                     else:
                         error_messages.append("Batch size must be a positive integer.")
-                        
-                if (max_height or max_width or max_file_size or batch_size) and config_updated:
+
+                if size_limit_changed:
                     success_messages.append("Size limits updated successfully")
-                    
+
             except ValueError:
                 error_messages.append("Height, width, file size, and batch size must be valid integers.")
 
-            # Save to config file if there were successful updates
-            if config_updated and not error_messages:
-                if save_config_to_file(current_config):
-                    success_messages.append("Settings saved to config/config.json")
+            # Persist first, apply second: if the file cannot be written, the app
+            # keeps behaving exactly as the file says it should.
+            if pending_app or pending_config:
+                if error_messages:
+                    # Report only what went wrong; nothing has been applied.
+                    success_messages = []
                 else:
-                    error_messages.append("Failed to save settings to configuration file")
+                    merged_config = json.loads(json.dumps(current_config))
+                    for section, values in pending_config.items():
+                        merged_config.setdefault(section, {}).update(values)
+
+                    def _apply():
+                        app.config.update(pending_app)
+                        current_config.clear()
+                        current_config.update(merged_config)
+                        if folder_message:
+                            success_messages.append(folder_message)
+                            logger.info(f"Upload folder changed to: {pending_app['UPLOAD_FOLDER']}")
+
+                    # Create the folder before the write, not after: a creation
+                    # failure then leaves config.json untouched (an empty new
+                    # directory is harmless), instead of a persisted setting the
+                    # running app never applied.
+                    folder_ready = True
+                    if 'UPLOAD_FOLDER' in pending_app:
+                        try:
+                            os.makedirs(pending_app['UPLOAD_FOLDER'], exist_ok=True)
+                        except OSError as e:
+                            folder_ready = False
+                            success_messages = []
+                            error_messages.append(f"Error with upload folder: {str(e)}")
+
+                    if folder_ready and save_config_to_file(merged_config):
+                        _apply()
+                        success_messages.append("Settings saved to config/config.json")
+                    elif folder_ready:
+                        success_messages = []
+                        error_messages.append("Failed to save settings to configuration file")
 
             # Flash messages
             for msg in success_messages:
