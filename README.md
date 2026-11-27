@@ -187,6 +187,25 @@ When uploading more than 50 photos (configurable), the application automatically
 4.	Delete Images:
     * Click the “Delete” button below an image to remove it.
 
+## Security: authentication is off by default
+
+The app ships with **no authentication enabled by default**. On a trusted LAN this is fine, but if you
+expose it beyond your LAN (directly or through a reverse proxy) you should enable auth — otherwise you
+are publishing a public upload/delete endpoint.
+
+- **Enable HTTP Basic auth:** set both `APP_USER` and `APP_PASSWORD` environment variables. When both
+  are set and non-empty, every route (including `/uploads/<file>` and `/static`) is gated and returns a
+  `401` challenge (`WWW-Authenticate: Basic realm="photo-uploader"`) until the correct credentials are
+  supplied. If only one of the two is set, auth stays off and a warning is logged naming the missing one.
+- **Set `SECRET_KEY`:** when you turn auth on, also set `SECRET_KEY` to a stable random value (e.g.
+  `openssl rand -hex 32`). Without it a fresh random key is generated at every boot, which is fine today
+  but will invalidate any signed session/cookie state after a restart.
+- **Do not publish port 5001** or enable the Traefik router label in `docker-compose.yml` without doing
+  one of the two things above.
+
+Authentication is configured purely through environment variables — there is deliberately no password
+field in `config/config.json`.
+
 ## License
 
 This project is licensed under the [LGPL v3.0](https://www.gnu.org/licenses/lgpl-3.0.html).

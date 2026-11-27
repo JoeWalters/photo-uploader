@@ -88,6 +88,11 @@ You can override configuration using environment variables:
 | `PORT` | Override server port | `5001` |
 | `HOST` | Override server host | `0.0.0.0` |
 | `MAX_FILE_SIZE` | Max file size in MB | `10` |
+| `APP_USER` | HTTP Basic auth username (enable auth when both `APP_USER` and `APP_PASSWORD` are set) | unset (auth disabled) |
+| `APP_PASSWORD` | HTTP Basic auth password (enable auth when both `APP_USER` and `APP_PASSWORD` are set) | unset (auth disabled) |
+| `SECRET_KEY` | Flask secret key; set a stable random value when auth is on | random per boot |
+
+Authentication is **off by default** — see the [Security section in README.md](README.md#security-authentication-is-off-by-default) to enable it.
 
 ### Config File Method (Recommended)
 Edit the `config/config.json` file in your mounted config directory:

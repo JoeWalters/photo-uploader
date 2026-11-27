@@ -7,6 +7,7 @@ import argparse
 import threading
 import time
 import uuid
+import hmac
 from pathlib import Path
 from werkzeug.utils import secure_filename
 from flask import Flask, request, redirect, render_template, url_for, send_from_directory, flash, jsonify
@@ -213,7 +214,7 @@ config = load_config()
 config = parse_command_line_args(config)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
+app.secret_key = os.environ.get('SECRET_KEY') or os.urandom(32)
 
 # Configure Flask app from config
 upload_folder = get_actual_upload_folder(config['upload']['folder'])
@@ -235,6 +236,47 @@ app.config['APP_CONFIG'] = config
 # Get and store application version
 app_version = get_app_version()
 app.config['APP_VERSION'] = app_version
+
+# Optional HTTP Basic authentication (off by default). Enabled only when BOTH
+# APP_USER and APP_PASSWORD are set and non-empty; if exactly one is set we log
+# a warning naming the missing one and stay disabled. Env-only: there is no
+# config.json key for credentials.
+auth_user = os.environ.get('APP_USER')
+auth_pass = os.environ.get('APP_PASSWORD')
+auth_enabled = bool(auth_user and auth_pass)
+if auth_enabled:
+    logger.info("HTTP Basic authentication ENABLED (APP_USER/APP_PASSWORD set)")
+elif auth_user or auth_pass:
+    missing = 'APP_PASSWORD' if auth_user else 'APP_USER'
+    logger.warning(
+        f"HTTP Basic authentication DISABLED: {missing} environment variable is not set; "
+        "auth stays off until both APP_USER and APP_PASSWORD are set"
+    )
+else:
+    logger.info("HTTP Basic authentication DISABLED (APP_USER/APP_PASSWORD not set)")
+
+
+def _unauthorized():
+    """401 challenge for unauthenticated requests when auth is enabled."""
+    return ('Authentication required', 401, {
+        'WWW-Authenticate': 'Basic realm="photo-uploader"',
+        'Content-Type': 'text/plain; charset=utf-8'
+    })
+
+
+@app.before_request
+def require_basic_auth():
+    """Gate every route with HTTP Basic auth when APP_USER/APP_PASSWORD are set."""
+    if not auth_enabled:
+        return None
+    auth = request.authorization
+    if auth is None or auth.username is None or auth.password is None:
+        return _unauthorized()
+    # compare_digest needs bytes; str raises TypeError on non-ASCII credentials.
+    if not (hmac.compare_digest(auth.username.encode('utf-8'), auth_user.encode('utf-8')) and
+            hmac.compare_digest(auth.password.encode('utf-8'), auth_pass.encode('utf-8'))):
+        return _unauthorized()
+    return None
 
 # Global dictionary to track batch upload progress
 batch_upload_status = {}
