@@ -793,7 +793,14 @@ def uploaded_file(filename):
         if not safe_filename or safe_filename != filename:
             logger.warning(f"Attempted to access file with unsafe name: {filename}")
             return "Invalid filename", 400
-        
+
+        # Serve only the types the gallery lists: a photo directory on a real
+        # share also holds sidecars and OS files, and this route must not hand
+        # those out by name.
+        if not allowed_file(safe_filename):
+            logger.warning(f"Attempted to access non-image file: {filename}")
+            return "Not found", 404
+
         return send_from_directory(app.config['UPLOAD_FOLDER'], safe_filename)
     except Exception as e:
         logger.error(f"Error serving file {filename}: {e}")
