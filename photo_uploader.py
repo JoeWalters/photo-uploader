@@ -1,5 +1,4 @@
 import os
-import subprocess
 import sys
 import logging
 import json
@@ -11,8 +10,16 @@ import hmac
 from pathlib import Path
 from werkzeug.utils import secure_filename
 from flask import Flask, request, redirect, render_template, url_for, send_from_directory, flash, jsonify
-from PIL import Image, ExifTags
 from datetime import datetime
+
+try:
+    from PIL import Image, ExifTags
+except ImportError:
+    sys.stderr.write(
+        "Pillow is not installed; install the pinned dependencies from requirements.txt "
+        "(see README.md) before starting the app.\n"
+    )
+    sys.exit(1)
 
 # Setup logging
 logging.basicConfig(
@@ -24,18 +31,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
-
-# Ensure Pillow is installed
-def ensure_pillow_installed():
-    try:
-        from PIL import Image  # Check if Pillow is installed
-    except ImportError:
-        logger.info("Pillow is not installed. Installing now...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "pillow"])
-        logger.info("Pillow installed successfully.")
-        from PIL import Image  # Import Pillow after installation
-
-ensure_pillow_installed()
 
 def get_actual_upload_folder(config_folder_path):
     """Determine the actual upload folder path, considering Docker environment."""
