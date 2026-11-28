@@ -7,6 +7,7 @@ import threading
 import time
 import uuid
 import hmac
+from urllib.parse import urlparse
 from pathlib import Path
 from werkzeug.utils import secure_filename
 from flask import Flask, request, redirect, render_template, url_for, send_from_directory, flash, jsonify
@@ -271,6 +272,31 @@ def require_basic_auth():
     if not (hmac.compare_digest(auth.username.encode('utf-8'), auth_user.encode('utf-8')) and
             hmac.compare_digest(auth.password.encode('utf-8'), auth_pass.encode('utf-8'))):
         return _unauthorized()
+    return None
+
+
+@app.before_request
+def same_origin_only():
+    """Reject cross-site state-changing requests.
+
+    This app has no cookies, so SameSite cannot help: a form POST from any page the
+    user happens to visit is authorised by network position alone. Compare the
+    Origin/Referer against the Host the request actually arrived on, and
+    deliberately allow requests that send neither so curl and the compose
+    healthcheck keep working.
+    """
+    if request.method not in ('POST', 'PUT', 'PATCH', 'DELETE'):
+        return None
+    origin = request.headers.get('Origin') or request.headers.get('Referer')
+    if not origin:
+        return None                      # CLI/healthcheck: no browser, no forgery
+    try:
+        host = urlparse(origin).netloc
+    except ValueError:
+        host = ''
+    if host != request.host:
+        logger.warning(f"Blocked cross-site {request.method} {request.path} from {origin}")
+        return "Cross-site request blocked", 403
     return None
 
 # Global dictionary to track batch upload progress
