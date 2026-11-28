@@ -10,8 +10,15 @@
             <!-- Sort Options -->
             <div class="d-flex justify-content-end">
                 <div class="dropdown me-2">
+                    {% set sort_labels = {
+                         'name':       {'asc': 'A-Z', 'desc': 'Z-A'},
+                         'date':       {'asc': 'Oldest First', 'desc': 'Newest First'},
+                         'size':       {'asc': 'Smallest First', 'desc': 'Largest First'},
+                         'dimensions': {'asc': 'Lowest Resolution', 'desc': 'Highest Resolution'},
+                         'aspect':     {'asc': 'Tallest First', 'desc': 'Widest First'}
+                       } %}
                     <button class="btn btn-outline-primary dropdown-toggle" type="button" id="sortDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-sort-down"></i> Sort: {{ sort_by.title() }} ({{ 'A-Z' if sort_order == 'asc' else 'Z-A' if sort_by == 'name' else 'New-Old' if sort_order == 'desc' else 'Old-New' }})
+                        <i class="bi bi-sort-down"></i> Sort: {{ sort_by.title() }} ({{ sort_labels.get(sort_by, {}).get(sort_order, sort_order|upper) }})
                     </button>
                     <ul class="dropdown-menu" aria-labelledby="sortDropdown">
                         <li><h6 class="dropdown-header">By Name</h6></li>
@@ -58,13 +65,13 @@
                         <i class="bi bi-grid-3x3-gap"></i> View
                     </button>
                     <ul class="dropdown-menu" aria-labelledby="viewDropdown">
-                        <li><a class="dropdown-item" href="#" onclick="setGridSize(2)">
+                        <li><a class="dropdown-item" href="#" data-grid="2" onclick="setGridSize(2, this)">
                             <i class="bi bi-grid"></i> Large (2 columns)
                         </a></li>
-                        <li><a class="dropdown-item active" href="#" onclick="setGridSize(4)">
+                        <li><a class="dropdown-item active" href="#" data-grid="4" onclick="setGridSize(4, this)">
                             <i class="bi bi-grid-3x3-gap"></i> Medium (4 columns)
                         </a></li>
-                        <li><a class="dropdown-item" href="#" onclick="setGridSize(6)">
+                        <li><a class="dropdown-item" href="#" data-grid="6" onclick="setGridSize(6, this)">
                             <i class="bi bi-grid-3x3-gap-fill"></i> Small (6 columns)
                         </a></li>
                     </ul>
@@ -85,6 +92,7 @@
     <!-- Upload Form -->
     <form id="uploadForm" action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data" class="mb-4">
         <div class="input-group">
+            <label for="fileInput" class="visually-hidden">Choose photos to upload</label>
             <input type="file" name="files" multiple class="form-control" id="fileInput" accept="image/*">
             <button type="submit" class="btn btn-primary" id="uploadBtn">Upload</button>
         </div>
@@ -389,8 +397,11 @@ function updateProgress() {
     const processed = uploadStats.uploaded + uploadStats.skipped + uploadStats.errors;
     const percentage = uploadStats.total > 0 ? (processed / uploadStats.total) * 100 : 0;
     
-    document.getElementById("progressBar").style.width = percentage + '%';
-    document.getElementById("progressBar").textContent = Math.round(percentage) + '%';
+    const bar = document.getElementById("progressBar");
+    bar.style.width = percentage + '%';
+    bar.textContent = Math.round(percentage) + '%';
+    bar.setAttribute("aria-valuenow", Math.round(percentage));
+    bar.setAttribute("aria-valuetext", `${processed} of ${uploadStats.total} processed`);
     
     document.getElementById("uploadedCount").textContent = uploadStats.uploaded;
     document.getElementById("skippedCount").textContent = uploadStats.skipped;
@@ -427,7 +438,7 @@ function showUploadResults() {
     }
 }
 
-function setGridSize(columns) {
+function setGridSize(columns, el) {
     const container = document.querySelector('.photo-grid');
     const colClass = `row-cols-lg-${columns}`;
     
@@ -441,7 +452,8 @@ function setGridSize(columns) {
     document.querySelectorAll('#viewDropdown + .dropdown-menu .dropdown-item').forEach(item => {
         item.classList.remove('active');
     });
-    event.target.classList.add('active');
+    const item = el || document.querySelector(`#viewDropdown + .dropdown-menu [data-grid="${columns}"]`);
+    if (item) item.classList.add('active');
     
     // Store preference in localStorage
     localStorage.setItem('gridSize', columns);
