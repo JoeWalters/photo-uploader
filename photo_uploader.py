@@ -1,5 +1,4 @@
 import os
-import subprocess
 import sys
 import logging
 import json
@@ -7,11 +6,20 @@ import argparse
 import threading
 import time
 import uuid
+import hmac
 from pathlib import Path
 from werkzeug.utils import secure_filename
 from flask import Flask, request, redirect, render_template, url_for, send_from_directory, flash, jsonify
-from PIL import Image, ExifTags
 from datetime import datetime
+
+try:
+    from PIL import Image, ExifTags
+except ImportError:
+    sys.stderr.write(
+        "Pillow is not installed; install the pinned dependencies from requirements.txt "
+        "(see README.md) before starting the app.\n"
+    )
+    sys.exit(1)
 
 # Setup logging
 logging.basicConfig(
@@ -23,18 +31,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
-
-# Ensure Pillow is installed
-def ensure_pillow_installed():
-    try:
-        from PIL import Image  # Check if Pillow is installed
-    except ImportError:
-        logger.info("Pillow is not installed. Installing now...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "pillow"])
-        logger.info("Pillow installed successfully.")
-        from PIL import Image  # Import Pillow after installation
-
-ensure_pillow_installed()
 
 def get_actual_upload_folder(config_folder_path):
     """Determine the actual upload folder path, considering Docker environment."""
@@ -213,7 +209,7 @@ config = load_config()
 config = parse_command_line_args(config)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
+app.secret_key = os.environ.get('SECRET_KEY') or os.urandom(32)
 
 # Configure Flask app from config
 upload_folder = get_actual_upload_folder(config['upload']['folder'])
@@ -235,6 +231,47 @@ app.config['APP_CONFIG'] = config
 # Get and store application version
 app_version = get_app_version()
 app.config['APP_VERSION'] = app_version
+
+# Optional HTTP Basic authentication (off by default). Enabled only when BOTH
+# APP_USER and APP_PASSWORD are set and non-empty; if exactly one is set we log
+# a warning naming the missing one and stay disabled. Env-only: there is no
+# config.json key for credentials.
+auth_user = os.environ.get('APP_USER')
+auth_pass = os.environ.get('APP_PASSWORD')
+auth_enabled = bool(auth_user and auth_pass)
+if auth_enabled:
+    logger.info("HTTP Basic authentication ENABLED (APP_USER/APP_PASSWORD set)")
+elif auth_user or auth_pass:
+    missing = 'APP_PASSWORD' if auth_user else 'APP_USER'
+    logger.warning(
+        f"HTTP Basic authentication DISABLED: {missing} environment variable is not set; "
+        "auth stays off until both APP_USER and APP_PASSWORD are set"
+    )
+else:
+    logger.info("HTTP Basic authentication DISABLED (APP_USER/APP_PASSWORD not set)")
+
+
+def _unauthorized():
+    """401 challenge for unauthenticated requests when auth is enabled."""
+    return ('Authentication required', 401, {
+        'WWW-Authenticate': 'Basic realm="photo-uploader"',
+        'Content-Type': 'text/plain; charset=utf-8'
+    })
+
+
+@app.before_request
+def require_basic_auth():
+    """Gate every route with HTTP Basic auth when APP_USER/APP_PASSWORD are set."""
+    if not auth_enabled:
+        return None
+    auth = request.authorization
+    if auth is None or auth.username is None or auth.password is None:
+        return _unauthorized()
+    # compare_digest needs bytes; str raises TypeError on non-ASCII credentials.
+    if not (hmac.compare_digest(auth.username.encode('utf-8'), auth_user.encode('utf-8')) and
+            hmac.compare_digest(auth.password.encode('utf-8'), auth_pass.encode('utf-8'))):
+        return _unauthorized()
+    return None
 
 # Global dictionary to track batch upload progress
 batch_upload_status = {}
@@ -635,10 +672,20 @@ def process_files_batch(files):
                 skipped_count += 1
                 continue
             
-            # Secure the filename
-            filename = secure_filename(original_filename)
-            if not filename:
-                logger.warning(f"Invalid filename after sanitization: {original_filename}")
+            # Split the extension off first: secure_filename() decodes to ASCII and drops
+            # everything else, so an all-non-ASCII name collapses to just its extension
+            # ('写真.png' -> 'png') and the stored file loses its type.
+            stem, ext = os.path.splitext(original_filename)
+            ext = ext.lower()
+            safe_stem = secure_filename(stem)
+            if not safe_stem:
+                safe_stem = f"photo_{uuid.uuid4().hex[:12]}"
+                logger.info(f"Generated name '{safe_stem}{ext}' for '{original_filename}'")
+            filename = f"{safe_stem}{ext}"
+            if secure_filename(filename) != filename:
+                logger.warning(
+                    f"Rejected upload: name could not be sanitised to a stable ASCII name: {original_filename}"
+                )
                 skipped_count += 1
                 continue
             
@@ -751,7 +798,14 @@ def uploaded_file(filename):
         if not safe_filename or safe_filename != filename:
             logger.warning(f"Attempted to access file with unsafe name: {filename}")
             return "Invalid filename", 400
-        
+
+        # Serve only the types the gallery lists: a photo directory on a real
+        # share also holds sidecars and OS files, and this route must not hand
+        # those out by name.
+        if not allowed_file(safe_filename):
+            logger.warning(f"Attempted to access non-image file: {filename}")
+            return "Not found", 404
+
         return send_from_directory(app.config['UPLOAD_FOLDER'], safe_filename)
     except Exception as e:
         logger.error(f"Error serving file {filename}: {e}")

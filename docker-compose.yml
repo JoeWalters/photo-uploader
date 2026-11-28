@@ -22,6 +22,10 @@ services:
       # - PORT=5001                   # Override port
       # - HOST=0.0.0.0               # Override host
       # - APP_VERSION=20251009123456  # Override version for local testing
+      # Authentication is OFF by default. Uncomment and set both to enable HTTP Basic auth.
+      # - APP_USER=your_user        # Enable auth: username
+      # - APP_PASSWORD=your_pass    # Enable auth: password
+      # - SECRET_KEY=change-me      # Stable random value; recommended when auth is on
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5001', timeout=5)"]
       interval: 30s
@@ -29,6 +33,7 @@ services:
       retries: 3
       start_period: 10s
     labels:
+      # Enabling Traefik without auth exposes the app publicly — see the README Security section.
       - "com.centurylinklabs.watchtower.enable=true"
       - "traefik.enable=true"  # If using Traefik
       - "traefik.http.routers.photo-uploader.rule=Host(`photos.yourdomain.com`)"
