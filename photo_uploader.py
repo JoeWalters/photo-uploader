@@ -672,10 +672,20 @@ def process_files_batch(files):
                 skipped_count += 1
                 continue
             
-            # Secure the filename
-            filename = secure_filename(original_filename)
-            if not filename:
-                logger.warning(f"Invalid filename after sanitization: {original_filename}")
+            # Split the extension off first: secure_filename() decodes to ASCII and drops
+            # everything else, so an all-non-ASCII name collapses to just its extension
+            # ('写真.png' -> 'png') and the stored file loses its type.
+            stem, ext = os.path.splitext(original_filename)
+            ext = ext.lower()
+            safe_stem = secure_filename(stem)
+            if not safe_stem:
+                safe_stem = f"photo_{uuid.uuid4().hex[:12]}"
+                logger.info(f"Generated name '{safe_stem}{ext}' for '{original_filename}'")
+            filename = f"{safe_stem}{ext}"
+            if secure_filename(filename) != filename:
+                logger.warning(
+                    f"Rejected upload: name could not be sanitised to a stable ASCII name: {original_filename}"
+                )
                 skipped_count += 1
                 continue
             
